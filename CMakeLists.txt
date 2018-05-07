@@ -12,6 +12,12 @@ cmake_minimum_required(VERSION 2.8)
 project(drl CXX C)
 
 
+#Global Setup
+set(CMAKE_CXX_STANDARD 14)
+
+# Define helper functions and macros used.
+include(cmake/internal_utils.cmake)
+
 
 
 if (drl_build_tests)
@@ -19,6 +25,7 @@ endif ()
 
 
 if (drl_build_tools)
+    cxx_executable_with_flags(build_docs_list "" "gflags;rlcsa;gomp" tool/build_docs_list.cpp)
 endif ()
 
 
