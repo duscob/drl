@@ -39,6 +39,7 @@ endif ()
 
 
 if (drl_build_benchmarks)
+    include(ConfigGBenchmark)
 endif ()
 
 
