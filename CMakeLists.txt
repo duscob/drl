@@ -11,6 +11,14 @@ cmake_minimum_required(VERSION 2.8)
 ##Project Information
 project(drl CXX C)
 
+# Location of additional cmake modules
+set(CMAKE_MODULE_PATH
+        ${CMAKE_MODULE_PATH}
+        ${PROJECT_SOURCE_DIR}/cmake)
+
+# Guard against in-source builds and bad build-type strings
+include(ConfigSafeGuards)
+
 
 #Global Setup
 set(CMAKE_CXX_STANDARD 14)
@@ -19,6 +27,7 @@ set(CMAKE_CXX_STANDARD 14)
 include(cmake/internal_utils.cmake)
 
 
+include(ConfigGTest)
 
 if (drl_build_tests)
 endif ()
