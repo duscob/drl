@@ -15,6 +15,12 @@ download_project(PROJ googlebenchmark
         GIT_TAG master
         ${UPDATE_DISCONNECTED_IF_AVAILABLE})
 
+#Benchmark
+# If you want to self-test benchmark lib too, turn me ON
+#
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "BENCHMARK_ENABLE_TESTING")
+set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "BENCHMARK_ENABLE_GTEST_TESTS")
+
 add_subdirectory(${googlebenchmark_SOURCE_DIR} ${googlebenchmark_BINARY_DIR})
 
 include_directories("${googlebenchmark_SOURCE_DIR}/include")
