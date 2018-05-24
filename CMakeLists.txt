@@ -23,13 +23,36 @@ include(ConfigSafeGuards)
 #Global Setup
 set(CMAKE_CXX_STANDARD 14)
 
+
+# Set common include folder for module
+set(COMMON_INCLUDES ${PROJECT_SOURCE_DIR}/include)
+
+include_directories(${COMMON_INCLUDES})
+
+
+set(SOURCE_FILES include/drl/doclist.h
+        src/doclist.cpp
+        include/drl/utils.h
+        src/utils.cpp
+        include/drl/pdlrp.h
+        src/pdlrp.cpp
+        include/drl/pdltree.h
+        src/pdltree.cpp)
+
+set(LIBS rlcsa gomp sdsl)
+
+add_library(drl ${SOURCE_FILES})
+target_link_libraries(drl ${LIBS})
+
+
 # Define helper functions and macros used.
 include(cmake/internal_utils.cmake)
 
 
-include(ConfigGTest)
-
 if (drl_build_tests)
+    enable_testing()
+
+    include(ConfigGTest)
 endif ()
 
 
@@ -40,6 +63,8 @@ endif ()
 
 if (drl_build_benchmarks)
     include(ConfigGBenchmark)
+
+    cxx_executable_with_flags(query_doc_list_idx_bm "" "gflags;benchmark;drl" benchmark/query_doc_list_idx_bm.cpp)
 endif ()
 
 
