@@ -63,6 +63,8 @@ endif ()
 
 if (drl_build_benchmarks)
     include(ConfigGBenchmark)
+
+    cxx_executable_with_flags(query_doc_list_idx_bm "" "gflags;benchmark;drl" benchmark/query_doc_list_idx_bm.cpp)
 endif ()
 
 
