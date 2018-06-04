@@ -217,13 +217,13 @@ endfunction()
 # Sets PYTHONINTERP_FOUND and PYTHON_EXECUTABLE.
 find_package(PythonInterp)
 
-# cxx_test_with_flags(name cxx_flags libs srcs...)
+# cxx_test_with_flags_and_args(name cxx_flags libs cmd_args srcs...)
 #
 # creates a named C++ test that depends on the given libs and is built
 # from the given source files with the given compiler flags.
-function(cxx_test_with_flags name cxx_flags libs)
+function(cxx_test_with_flags_and_args name cxx_flags libs cmd_args)
   cxx_executable_with_flags(${name} "${cxx_flags}" "${libs}" ${ARGN})
-  add_test(${name} ${name})
+  add_test(${name} ${name} ${cmd_args})
 endfunction()
 
 # cxx_test(name libs srcs...)

@@ -37,7 +37,8 @@ set(SOURCE_FILES include/drl/doclist.h
         include/drl/pdlrp.h
         src/pdlrp.cpp
         include/drl/pdltree.h
-        src/pdltree.cpp)
+        src/pdltree.cpp
+        include/drl/construct_da.h)
 
 set(LIBS rlcsa gomp sdsl)
 
@@ -53,6 +54,8 @@ if (drl_build_tests)
     enable_testing()
 
     include(ConfigGTest)
+
+    cxx_test_with_flags_and_args(da_construct_test "" "gtest;gflags;drl" "" test/da_construct_test.cpp)
 endif ()
 
 
