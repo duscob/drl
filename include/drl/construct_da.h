@@ -24,6 +24,15 @@ void ConstructDocBorder(const std::string& data_file, DocBorder &doc_border, con
   doc_border.swap(tmp_doc_border);
 }
 
+
+template <typename SuffixArray, typename DocBorderRank, typename DocArray>
+void ConstructDocArray(const SuffixArray &suf_array, const DocBorderRank &doc_border_rank, DocArray &doc_array){
+  doc_array = DocArray(suf_array.size());
+  for (int i = 0; i < suf_array.size(); ++i) {
+    doc_array[i] = doc_border_rank(suf_array[i]);
+  }
+};
+
 }
 
 #endif //DRL_CONSTRUCT_DA_H
