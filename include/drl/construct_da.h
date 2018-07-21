@@ -61,7 +61,7 @@ template<typename SuffixArray, typename DocBorderRank, typename DocArray>
 void ConstructDocArray(const SuffixArray &suf_array, const DocBorderRank &doc_border_rank, DocArray &doc_array) {
   doc_array = DocArray(suf_array.size());
   for (int i = 0; i < suf_array.size(); ++i) {
-    doc_array[i] = doc_border_rank(suf_array[i]);
+    doc_array[i] = doc_border_rank(suf_array[i]) + 1;
   }
 };
 
