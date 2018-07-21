@@ -55,7 +55,7 @@ if (drl_build_tests)
 
     include(ConfigGTest)
 
-    cxx_test_with_flags_and_args(da_construct_test "" "gtest;gflags;drl;divsufsort;divsufsort64" "" test/da_construct_test.cpp)
+    cxx_test_with_flags_and_args(construct_da_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/construct_da_test.cpp)
 endif ()
 
 
