@@ -38,9 +38,10 @@ set(SOURCE_FILES include/drl/doclist.h
         src/pdlrp.cpp
         include/drl/pdltree.h
         src/pdltree.cpp
-        include/drl/construct_da.h)
+        include/drl/construct_da.h
+        include/drl/pdloda.h)
 
-set(LIBS rlcsa gomp sdsl)
+set(LIBS rlcsa gomp sdsl grammar)
 
 add_library(drl ${SOURCE_FILES})
 target_link_libraries(drl ${LIBS})
@@ -56,6 +57,8 @@ if (drl_build_tests)
     include(ConfigGTest)
 
     cxx_test_with_flags_and_args(construct_da_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/construct_da_test.cpp)
+
+    cxx_test_with_flags_and_args(pdloda_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/pdloda_test.cpp)
 endif ()
 
 
@@ -67,7 +70,7 @@ endif ()
 if (drl_build_benchmarks)
     include(ConfigGBenchmark)
 
-    cxx_executable_with_flags(query_doc_list_idx_bm "" "gflags;benchmark;drl" benchmark/query_doc_list_idx_bm.cpp)
+    cxx_executable_with_flags(query_doc_list_idx_bm "" "gflags;benchmark;drl;sdsl;divsufsort;divsufsort64" benchmark/query_doc_list_idx_bm.cpp)
 endif ()
 
 
