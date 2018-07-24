@@ -34,7 +34,7 @@ std::string PDLODASearch_TF::tmp_filename;
 
 
 TEST_P(PDLODASearch_TF, search) {
-  drl::PDLODA<sdsl::csa_wt<>, grammar::SLPWithMetadata<grammar::PTS>> idx(tmp_filename, '$');
+  drl::PDLODA<sdsl::csa_wt<>, grammar::SLPWithMetadata<grammar::PTS<>>> idx(tmp_filename, '$');
 
   const auto &pattern = std::get<0>(GetParam());
   const auto &eresult = std::get<1>(GetParam());
@@ -79,8 +79,8 @@ std::string PDLODAGeneric_TF<T>::tmp_filename;
 
 
 using MyTypes = ::testing::Types<
-    drl::PDLODA<sdsl::csa_wt<>, grammar::SLPWithMetadata<grammar::PTS>>,
-    drl::PDLODA<sdsl::csa_bitcompressed<>, grammar::SLPWithMetadata<grammar::PTS>>>;
+    drl::PDLODA<sdsl::csa_wt<>, grammar::SLPWithMetadata<grammar::PTS<>>>,
+    drl::PDLODA<sdsl::csa_bitcompressed<>, grammar::SLPWithMetadata<grammar::PTS<>>>>;
 TYPED_TEST_CASE(PDLODAGeneric_TF, MyTypes);
 
 

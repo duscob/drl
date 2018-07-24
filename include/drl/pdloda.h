@@ -60,15 +60,15 @@ class PDLODA {
     if (span_cover.empty())
       return;
 
-    auto docs = slp_.GetData(span_cover[0]);
+    std::vector<typename decltype(slp_.GetData(span_cover[0]))::value_type> docs;
     decltype(docs) tmp_docs;
-//    for (int i = 1; i < span_cover.size(); ++i) {
+//    for (int i = 0; i < span_cover.size(); ++i) {
 //      tmp_docs.swap(docs);
 //      docs.clear();
 //      const auto &partial_docs = slp_.GetData(span_cover[i]);
 //      set_union(tmp_docs.begin(), tmp_docs.end(), partial_docs.begin(), partial_docs.end(), back_inserter(docs));
 //    }
-    for (int i = 1; i < span_cover.size(); ++i) {
+    for (int i = 0; i < span_cover.size(); ++i) {
       const auto &partial_docs = slp_.GetData(span_cover[i]);
 
       tmp_docs.resize(docs.size() + partial_docs.size());
@@ -98,6 +98,11 @@ class PDLODA {
       return;
 
     SearchInRange(sp, ep + 1, out);
+  }
+
+
+  const _SA &sa() const {
+    return sa_;
   }
 
 
