@@ -30,11 +30,16 @@ class PDLODASearch_TF : public ::testing::TestWithParam<std::tuple<std::string, 
     std::remove(tmp_filename.c_str());
   }
 };
+
+
 std::string PDLODASearch_TF::tmp_filename;
 
 
 TEST_P(PDLODASearch_TF, search) {
-  drl::PDLODA<sdsl::csa_wt<>, grammar::SLPWithMetadata<grammar::PTS<>>> idx(tmp_filename, '$');
+  drl::PDLODA<sdsl::csa_wt<>, grammar::SLP<>, grammar::PTS<>, drl::ComputeSpanCoverFromTopWrapper> idx(
+      tmp_filename,
+      '$',
+      drl::ConstructSLPAndComputePTS());
 
   const auto &pattern = std::get<0>(GetParam());
   const auto &eresult = std::get<1>(GetParam());
@@ -74,18 +79,34 @@ class PDLODAGeneric_TF : public ::testing::Test {
     std::remove(tmp_filename.c_str());
   }
 };
-template <typename T>
+
+
+template<typename T>
 std::string PDLODAGeneric_TF<T>::tmp_filename;
 
-
 using MyTypes = ::testing::Types<
-    drl::PDLODA<sdsl::csa_wt<>, grammar::SLPWithMetadata<grammar::PTS<>>>,
-    drl::PDLODA<sdsl::csa_bitcompressed<>, grammar::SLPWithMetadata<grammar::PTS<>>>>;
+    std::pair<drl::PDLODA<sdsl::csa_wt<>, grammar::SLP<>, grammar::PTS<>, drl::ComputeSpanCoverFromTopWrapper>,
+              drl::ConstructSLPAndComputePTS>,
+    std::pair<drl::PDLODA<sdsl::csa_bitcompressed<>,
+                          grammar::SLP<>,
+                          grammar::PTS<>,
+                          drl::ComputeSpanCoverFromTopWrapper>,
+              drl::ConstructSLPAndComputePTS>,
+    std::pair<drl::PDLODA<sdsl::csa_bitcompressed<>,
+                          grammar::SLP<>,
+                          grammar::SampledPTS<grammar::SLP<>>,
+                          drl::ComputeSpanCoverFromTopWrapper>,
+              drl::ConstructSLPAndComputePTS>,
+    std::pair<drl::PDLODA<sdsl::csa_bitcompressed<>,
+                          grammar::SampledSLP<>,
+                          grammar::Chunks<>,
+                          drl::ComputeSpanCoverFromBottomWrapper>,
+              drl::ComputeSLPAndPTS>>;
 TYPED_TEST_CASE(PDLODAGeneric_TF, MyTypes);
 
 
 TYPED_TEST(PDLODAGeneric_TF, search) {
-  TypeParam idx(this->tmp_filename, '$');
+  typename TypeParam::first_type idx(this->tmp_filename, '$', typename TypeParam::second_type());
 
   std::string pattern = "TA";
   std::vector<uint32_t> eresult = {1, 2};
