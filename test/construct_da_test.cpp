@@ -160,9 +160,9 @@ INSTANTIATE_TEST_CASE_P(
     ::testing::Values(
         std::make_tuple("TATA$LATA$AAAA$",
                         '$',
-                        sdsl::int_vector<>({3, 2, 1, 0, 2, 1, 0, 2, 2, 2, 1, 0, 1, 1, 0, 0})),
+                        sdsl::int_vector<>({4, 3, 2, 1, 3, 2, 1, 3, 3, 3, 2, 1, 2, 2, 1, 1})),
         std::make_tuple("TATA$LATA$AAAA$",
                         'X',
-                        sdsl::int_vector<>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}))
+                        sdsl::int_vector<>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}))
     )
 );
