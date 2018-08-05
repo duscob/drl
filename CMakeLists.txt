@@ -39,7 +39,8 @@ set(SOURCE_FILES include/drl/doclist.h
         include/drl/pdltree.h
         src/pdltree.cpp
         include/drl/construct_da.h
-        include/drl/pdloda.h)
+        include/drl/pdloda.h
+        include/drl/merge_sets.h)
 
 set(LIBS rlcsa gomp sdsl grammar)
 
@@ -57,6 +58,8 @@ if (drl_build_tests)
     include(ConfigGTest)
 
     cxx_test_with_flags_and_args(construct_da_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/construct_da_test.cpp)
+
+    cxx_test_with_flags_and_args(merge_sets_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/merge_sets_test.cpp)
 
     cxx_test_with_flags_and_args(pdloda_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/pdloda_test.cpp)
 endif ()
