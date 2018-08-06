@@ -14,6 +14,7 @@
 #include <grammar/slp.h>
 
 #include "construct_da.h"
+#include "merge_sets.h"
 
 
 namespace drl {
@@ -64,7 +65,10 @@ class ComputeSLPAndActionPTS {
     _encoder.Encode(_first, _last, wrapper);
 
     grammar::Chunks<> chunks;
-    _slp.Compute(tmp_slp, 256, grammar::AddSet<grammar::Chunks<>>(chunks), grammar::MustBeSampled<grammar::Chunks<>>(chunks, 16));
+    _slp.Compute(tmp_slp,
+                 256,
+                 grammar::AddSet<grammar::Chunks<>>(chunks),
+                 grammar::MustBeSampled<grammar::Chunks<>>(chunks, 16));
 
     auto bit_compress = [](sdsl::int_vector<> &_v) { sdsl::util::bit_compress(_v); };
     _pts = _PTS(chunks, bit_compress, bit_compress);
@@ -205,25 +209,7 @@ class PDLODA {
       return docs;
     }
 
-    decltype(docs) tmp_docs;
-//    for (int i = 0; i < span_cover.size(); ++i) {
-//      tmp_docs.swap(docs);
-//      docs.clear();
-//      const auto &partial_docs = slp_.GetData(span_cover[i]);
-//      set_union(tmp_docs.begin(), tmp_docs.end(), partial_docs.begin(), partial_docs.end(), back_inserter(docs));
-//    }
-
-    for (const auto &item : span_cover) {
-      const auto &partial_docs = pts_[item];
-
-      tmp_docs.resize(docs.size() + partial_docs.size());
-      tmp_docs.swap(docs);
-
-      auto it = set_union(tmp_docs.begin(), tmp_docs.end(), partial_docs.begin(), partial_docs.end(), docs.begin());
-
-      docs.resize(it - docs.begin());
-    }
-
+    drl::MergeSetsOneByOne(span_cover.begin(), span_cover.end(), pts_, docs);
 
 //    std::set<std::size_t> docs;
 //    for (auto &&v : span_cover) {
