@@ -45,15 +45,25 @@ TEST_P(MergeSets_TF, MergeSetsOneByOne) {
 }
 
 
+TEST_P(MergeSets_TF, MergeSetsBinaryTree) {
+  const auto &sets = GetParam();
+
+  std::vector<uint32_t> set;
+  drl::MergeSetsBinaryTree(idx_sets.begin(), idx_sets.end(), sets, set);
+
+  EXPECT_EQ(set, e_set);
+}
+
+
 TEST_P(MergeSets_TF, MergeSetsOneByOneWithSetUnion) {
   const auto &sets = GetParam();
 
-  auto setunion = [](auto _first1, auto _last1, auto _first2, auto _last2, auto _result) -> auto {
+  auto std_set_union = [](auto _first1, auto _last1, auto _first2, auto _last2, auto _result) -> auto {
     return std::set_union(_first1, _last1, _first2, _last2, _result);
   };
 
   std::vector<uint32_t> set;
-  drl::MergeSetsOneByOne(idx_sets.begin(), idx_sets.end(), sets, set, setunion);
+  drl::MergeSetsOneByOne(idx_sets.begin(), idx_sets.end(), sets, set, std_set_union);
 
   EXPECT_EQ(set, e_set);
 }
