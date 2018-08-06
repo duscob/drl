@@ -35,6 +35,26 @@ class MergeSets_TF : public ::testing::TestWithParam<Sets> {
 };
 
 
+TEST_P(MergeSets_TF, SetUnion) {
+  const auto &sets = GetParam();
+
+  std::vector<uint32_t> set, tmp_set, r_set;
+  for (const auto &item : sets) {
+    tmp_set.resize(set.size() + item.size());
+    tmp_set.swap(set);
+    r_set.resize(set.size());
+
+    auto last_it = std::set_union(tmp_set.begin(), tmp_set.end(), item.begin(), item.end(), set.begin());
+    set.resize(last_it - set.begin());
+
+    auto last_it1 = drl::SetUnion(tmp_set.begin(), tmp_set.end(), item.begin(), item.end(), r_set.begin());
+    r_set.resize(last_it1 - r_set.begin());
+
+    EXPECT_EQ(r_set, set);
+  }
+}
+
+
 TEST_P(MergeSets_TF, MergeSetsOneByOne) {
   const auto &sets = GetParam();
 

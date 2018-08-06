@@ -11,6 +11,46 @@
 
 namespace drl {
 
+template<typename _II1, typename _II2, typename _OI>
+inline _OI SetUnion(_II1 __first1, _II1 __last1, _II2 __first2, _II2 __last2, _OI __result) {
+  if (__first1 != __last1 && __first2 != __last2) {
+    bool upd1 = false;
+    bool upd2 = false;
+    auto val1 = *__first1;
+    auto val2 = *__first2;
+    while (__first1 != __last1 && __first2 != __last2) {
+      if (upd1) {
+        val1 = *__first1;
+        upd1 = false;
+      }
+      if (upd2) {
+        val2 = *__first2;
+        upd2 = false;
+      }
+
+      if (val1 < val2) {
+        *__result = val1;
+        ++__first1;
+        upd1 = true;
+      } else if (val2 < val1) {
+        *__result = val2;
+        ++__first2;
+        upd2 = true;
+      } else {
+        *__result = val1;
+        ++__first1;
+        upd1 = true;
+        ++__first2;
+        upd2 = true;
+      }
+      ++__result;
+    }
+  }
+
+  return std::copy(__first2, __last2, std::copy(__first1, __last1, __result));
+};
+
+
 template<typename _II, typename _Sets, typename _Result>
 void MergeSetsOneByOne(_II _first, _II _last, const _Sets &_sets, _Result &_result) {
   auto default_set_union = [](auto _first1, auto _last1, auto _first2, auto _last2, auto _result) -> auto {
