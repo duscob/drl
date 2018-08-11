@@ -6,6 +6,8 @@
 #define DRL_PDLODA_H
 
 #include <vector>
+#include <fstream>
+#include <iterator>
 
 #include <grammar/re_pair.h>
 #include <grammar/slp_helper.h>
@@ -144,7 +146,7 @@ template<typename _SA,
     typename _BitVectorDocBorderRank = typename _BitVectorDocBorder::rank_1_type>
 class PDLODA {
  public:
-  template<typename _E = int8_t, typename _Constructor, typename _LoadSLPAndPTS = DefaultLoadSLPAndPTS>
+  template<typename _E, typename _Constructor, typename _LoadSLPAndPTS = DefaultLoadSLPAndPTS>
   PDLODA(const std::string &filename,
          const _E &doc_delim,
          _Constructor _construct,
@@ -159,7 +161,7 @@ class PDLODA {
       sdsl::load_from_file(doc_border_, sdsl::cache_file_name<_BitVectorDocBorder>("doc_border_", cconfig));
     } else {
       std::ifstream in(filename, std::ios::binary);
-      drl::ConstructDocBorder(std::istream_iterator<_E>(in),
+      drl::ConstructDocBorder(std::istream_iterator<_E>(in >> std::noskipws),
                               std::istream_iterator<_E>{},
                               doc_border_,
                               doc_delim,
@@ -210,6 +212,8 @@ class PDLODA {
     }
 
     drl::MergeSetsOneByOne(span_cover.begin(), span_cover.end(), pts_, docs);
+//    drl::MergeSetsBinaryTree(span_cover.begin(), span_cover.end(), pts_, docs);
+
 
 //    std::set<std::size_t> docs;
 //    for (auto &&v : span_cover) {
