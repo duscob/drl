@@ -14,9 +14,9 @@
 #include <grammar/sampled_slp.h>
 #include <grammar/slp_metadata.h>
 #include <grammar/slp.h>
+#include <grammar/algorithm.h>
 
 #include "construct_da.h"
-#include "merge_sets.h"
 
 
 namespace drl {
@@ -25,21 +25,22 @@ class ConstructSLPAndComputePTS {
  public:
   template<typename _II, typename _Encoder, typename _SLP, typename _PTS>
   void operator()(_II begin, _II end, _Encoder encoder, _SLP &slp, _PTS &pts) const {
-    auto wrapper = BuildSLPWrapper(slp);
+    grammar::SLP<> tmp_slp(0);
+    auto wrapper = BuildSLPWrapper(tmp_slp);
     encoder.Encode(begin, end, wrapper);
+
+    auto bit_compress = [](sdsl::int_vector<> &_v) { sdsl::util::bit_compress(_v); };
+    slp = _SLP(tmp_slp, bit_compress, bit_compress);
 
     pts.Compute(&slp);
   }
 };
 
 
-class ComputeSpanCoverFromTopWrapper {
+class ComputeSpanCoverFromTopFunctor {
  public:
   template<typename _SLP, typename _OutputIterator>
-  std::pair<std::size_t, std::size_t> operator()(const _SLP &slp,
-                                                 std::size_t begin,
-                                                 std::size_t end,
-                                                 _OutputIterator out) const {
+  auto operator()(const _SLP &slp, std::size_t begin, std::size_t end, _OutputIterator out) const {
     return ComputeSpanCover(slp, begin, end, out);
   }
 };
@@ -53,7 +54,21 @@ class ComputeSLPAndPTS {
     auto wrapper = BuildSLPWrapper(tmp_slp);
     encoder.Encode(begin, end, wrapper);
 
-    slp.Compute(tmp_slp, 256, grammar::AddSet<_PTS>(pts), grammar::MustBeSampled<_PTS>(pts, 16));
+    grammar::AddSet<_PTS> add_set(pts);
+    slp.Compute(tmp_slp, 256, add_set, add_set, grammar::MustBeSampled<_PTS>(pts, 16));
+  }
+};
+
+
+class ComputeCombinedSLPAndPTS {
+ public:
+  template<typename _II, typename _Encoder, typename _SLP, typename _PTS>
+  void operator()(_II begin, _II end, _Encoder encoder, _SLP &slp, _PTS &pts) const {
+    auto wrapper = BuildSLPWrapper(slp);
+    encoder.Encode(begin, end, wrapper);
+
+    grammar::AddSet<_PTS> add_set(pts);
+    slp.Compute(256, add_set, add_set, grammar::MustBeSampled<_PTS>(pts, 16));
   }
 };
 
@@ -67,10 +82,8 @@ class ComputeSLPAndActionPTS {
     _encoder.Encode(_first, _last, wrapper);
 
     grammar::Chunks<> chunks;
-    _slp.Compute(tmp_slp,
-                 256,
-                 grammar::AddSet<grammar::Chunks<>>(chunks),
-                 grammar::MustBeSampled<grammar::Chunks<>>(chunks, 16));
+    grammar::AddSet<grammar::Chunks<>> add_set(chunks);
+    _slp.Compute(tmp_slp, 256, add_set, add_set, grammar::MustBeSampled<grammar::Chunks<>>(chunks, 16));
 
     auto bit_compress = [](sdsl::int_vector<> &_v) { sdsl::util::bit_compress(_v); };
     _pts = _PTS(chunks, bit_compress, bit_compress);
@@ -78,13 +91,10 @@ class ComputeSLPAndActionPTS {
 };
 
 
-class ComputeSpanCoverFromBottomWrapper {
+class ComputeSpanCoverFromBottomFunctor {
  public:
   template<typename _SLP, typename _OutputIterator>
-  std::pair<std::size_t, std::size_t> operator()(const _SLP &slp,
-                                                 std::size_t begin,
-                                                 std::size_t end,
-                                                 _OutputIterator out) const {
+  auto operator()(const _SLP &slp, std::size_t begin, std::size_t end, _OutputIterator out) const {
     return ComputeSpanCoverFromBottom(slp, begin, end, out);
   }
 };
@@ -99,10 +109,8 @@ class ComputeSLPAndCompactPTS {
     encoder.Encode(begin, end, wrapper);
 
     grammar::Chunks<> pts;
-    _slp.Compute(tmp_slp,
-                 256,
-                 grammar::AddSet<grammar::Chunks<>>(pts),
-                 grammar::MustBeSampled<grammar::Chunks<>>(pts, 16));
+    grammar::AddSet<grammar::Chunks<>> add_set(pts);
+    _slp.Compute(tmp_slp, 256, add_set, add_set, grammar::MustBeSampled<grammar::Chunks<>>(pts, 16));
 
     grammar::RePairEncoder<false> encoder1;
     _pts.Compute(pts.GetObjects().begin(), pts.GetObjects().end(), pts, encoder1);
@@ -132,6 +140,180 @@ class LoadSLPAndPTS {
 };
 
 
+class SAGetDocs {
+ public:
+  template<typename _Result, typename _SA, typename _SLP, typename _PTS>
+  void operator()(std::size_t _first,
+                  std::size_t _last,
+                  _Result &_result,
+                  const _SA &_sa,
+                  const _SLP &_slp,
+                  const _PTS &_pts) const {
+    _sa.GetDocs(_first, _last, _result);
+  }
+};
+
+
+class SLPGetSpan {
+ public:
+  template<typename _Result, typename _SA, typename _SLP, typename _PTS>
+  void operator()(std::size_t _first,
+                  std::size_t _last,
+                  _Result &_result,
+                  const _SA &_sa,
+                  const _SLP &_slp,
+                  const _PTS &_pts) const {
+
+    if (_first >= _last)
+      return;
+
+    auto leaf = _slp.Leaf(_first);
+    auto pos = _slp.Position(leaf);
+
+    while (_first < _last) {
+      std::vector<uint32_t> vars;
+      grammar::ComputeSpanCover(_slp, _first - pos, _last - pos, back_inserter(vars), _slp.Map(leaf));
+
+      for (const auto &v : vars) {
+        auto span = _slp.Span(v);
+        std::copy(span.begin(), span.end(), back_inserter(_result));
+      }
+
+      _first = pos = _slp.Position(++leaf);
+    }
+  }
+};
+
+
+template<typename _VarType, typename _SLP, typename _OI>
+void ComputeSpanFromLeft(_VarType _var, std::size_t &_length, const _SLP &_slp, _OI _out) {
+  if (_slp.IsTerminal(_var)) {
+    _out = _var;
+    ++_out;
+    --_length;
+    return;
+  }
+
+  const auto &children = _slp[_var];
+  ComputeSpanFromLeft(children.first, _length, _slp, _out);
+
+  if (_length) {
+    ComputeSpanFromLeft(children.second, _length, _slp, _out);
+  }
+}
+
+
+template<typename _VarType, typename _SLP, typename _OI>
+void ComputeSpanFromFront(_VarType _var, std::size_t _length, const _SLP &_slp, _OI _out) {
+  const auto &cover = _slp.Cover(_var);
+
+  auto size = cover.size();
+
+  for (auto it = cover.begin(); _length && size; --size, ++it) {
+    ComputeSpanFromLeft(*it, _length, _slp, _out);
+  }
+}
+
+
+template<typename _VarType, typename _SLP, typename _OI>
+void ComputeSpanFromLeft(_VarType _var, std::size_t &_skip, std::size_t &_length, const _SLP &_slp, _OI _out) {
+  if (_slp.IsTerminal(_var)) {
+    --_skip;
+    return;
+  }
+
+  const auto &children = _slp[_var];
+  ComputeSpanFromLeft(children.first, _skip, _length, _slp, _out);
+
+  if (_skip) {
+    ComputeSpanFromLeft(children.second, _skip, _length, _slp, _out);
+  } else if (_length) {
+    ComputeSpanFromLeft(children.second, _length, _slp, _out);
+  }
+}
+
+
+template<typename _VarType, typename _SLP, typename _OI>
+void ComputeSpanFromFront(_VarType _var, std::size_t _skip, std::size_t _length, const _SLP &_slp, _OI _out) {
+  const auto &cover = _slp.Cover(_var);
+
+  auto size = cover.size();
+
+  for (auto it = cover.begin(); _length && size; --size, ++it) {
+    if (_skip) {
+      ComputeSpanFromLeft(*it, _skip, _length, _slp, _out);
+    } else {
+      ComputeSpanFromLeft(*it, _length, _slp, _out);
+    }
+  }
+}
+
+
+template<typename _VarType, typename _SLP, typename _OI>
+void ComputeSpanFromRight(_VarType _var, std::size_t &_length, const _SLP &_slp, _OI _out) {
+  if (_slp.IsTerminal(_var)) {
+    _out = _var;
+    ++_out;
+    --_length;
+    return;
+  }
+
+  const auto &children = _slp[_var];
+  ComputeSpanFromRight(children.second, _length, _slp, _out);
+
+  if (_length) {
+    ComputeSpanFromRight(children.first, _length, _slp, _out);
+  }
+}
+
+
+template<typename _VarType, typename _SLP, typename _OI>
+void ComputeSpanFromBack(_VarType _var, std::size_t _length, const _SLP &_slp, _OI _out) {
+  const auto &cover = _slp.Cover(_var);
+
+  auto size = cover.size();
+
+  for (auto it = cover.end() - 1; _length && size; --size, --it) {
+    ComputeSpanFromRight(*it, _length, _slp, _out);
+  }
+}
+
+
+class LSLPGetSpan {
+ public:
+  template<typename _Result, typename _SA, typename _SLP, typename _PTS>
+  void operator()(std::size_t _first,
+                  std::size_t _last,
+                  _Result &_result,
+                  const _SA &_sa,
+                  const _SLP &_slp,
+                  const _PTS &_pts) const {
+
+    if (_first >= _last)
+      return;
+
+    auto leaf = _slp.Leaf(_first);
+    auto pos = _slp.Position(leaf);
+
+    if (pos == _first) {
+      ComputeSpanFromFront(leaf, _last - pos, _slp, back_inserter(_result));
+    } else {
+      auto next_pos = _slp.Position(leaf + 1);
+
+      if (next_pos <= _last) {
+        ComputeSpanFromBack(leaf, next_pos - _first, _slp, back_inserter(_result));
+
+        if (next_pos < _last) {
+          ComputeSpanFromFront(leaf + 1, _last - next_pos, _slp, back_inserter(_result));
+        }
+      } else {
+        ComputeSpanFromFront(leaf, _first - pos, _last - _first, _slp, back_inserter(_result));
+      }
+    }
+  }
+};
+
+
 //! Precomputed Document List On Document Array
 /**
  *
@@ -142,47 +324,64 @@ template<typename _SA,
     typename _SLP,
     typename _PTS,
     typename _ComputeSpanCover,
+    typename _ComputeRangeTerms = SAGetDocs/*,
     typename _BitVectorDocBorder = sdsl::bit_vector,
-    typename _BitVectorDocBorderRank = typename _BitVectorDocBorder::rank_1_type>
+    typename _BitVectorDocBorderRank = typename _BitVectorDocBorder::rank_1_type*/>
 class PDLODA {
  public:
-  template<typename _E, typename _Constructor, typename _LoadSLPAndPTS = DefaultLoadSLPAndPTS>
-  PDLODA(const std::string &filename,
-         const _E &doc_delim,
-         _Constructor _construct,
-         _LoadSLPAndPTS _load = DefaultLoadSLPAndPTS(),
-         _ComputeSpanCover _compute_cover = _ComputeSpanCover()) {
-    uint8_t num_bytes = sizeof(_E);
-    std::string id = sdsl::util::basename(filename) + "_";
-    sdsl::cache_config cconfig{false, "./", id};
-    construct(sa_, filename, cconfig, num_bytes);
-
-    if (sdsl::cache_file_exists<_BitVectorDocBorder>("doc_border_", cconfig)) {
-      sdsl::load_from_file(doc_border_, sdsl::cache_file_name<_BitVectorDocBorder>("doc_border_", cconfig));
-    } else {
-      std::ifstream in(filename, std::ios::binary);
-      drl::ConstructDocBorder(std::istream_iterator<_E>(in >> std::noskipws),
-                              std::istream_iterator<_E>{},
-                              doc_border_,
-                              doc_delim,
-                              sa_.size());
-
-      sdsl::store_to_file(doc_border_, sdsl::cache_file_name<_BitVectorDocBorder>("doc_border_", cconfig));
-    }
-    doc_border_rank_ = _BitVectorDocBorderRank(&doc_border_);
+  template</*typename _E, */typename _Constructor, typename _LoadSLPAndPTS = DefaultLoadSLPAndPTS>
+  PDLODA(/*const std::string &filename,
+         const _E &doc_delim,*/
+      const _SA &_sa,
+      sdsl::cache_config &cconfig,
+      _Constructor _construct,
+      _LoadSLPAndPTS _load = DefaultLoadSLPAndPTS(),
+      _ComputeSpanCover _compute_cover = _ComputeSpanCover()): sa_(_sa), cover_(_compute_cover) {
+//    uint8_t num_bytes = sizeof(_E);
+//    std::string id = sdsl::util::basename(filename) + "_";
+//    sdsl::cache_config cconfig{false, "./", id};
+//    construct(sa_, filename, cconfig, num_bytes);
+//
+//    if (sdsl::cache_file_exists<_BitVectorDocBorder>("doc_border_", cconfig)) {
+//      sdsl::load_from_file(doc_border_, sdsl::cache_file_name<_BitVectorDocBorder>("doc_border_", cconfig));
+//    } else {
+//      std::ifstream in(filename, std::ios::binary);
+//      drl::ConstructDocBorder(std::istream_iterator<_E>(in >> std::noskipws),
+//                              std::istream_iterator<_E>{},
+//                              doc_border_,
+//                              doc_delim,
+//                              sa_.size());
+//
+//      sdsl::store_to_file(doc_border_, sdsl::cache_file_name<_BitVectorDocBorder>("doc_border_", cconfig));
+//    }
+//    doc_border_rank_ = _BitVectorDocBorderRank(&doc_border_);
 
     if (sdsl::cache_file_exists<_SLP>("slp", cconfig) && sdsl::cache_file_exists<_PTS>("pts", cconfig)) {
+      std::cout << "Load SLP & PTS" << std::endl;
       _load(slp_, pts_, cconfig);
     } else {
-      sdsl::int_vector<> doc_array(sa_.size() + 1);
-      drl::ConstructDocArray(sa_, doc_border_rank_, doc_array);
+      std::cout << "Compute SLP & PTS" << std::endl;
+//      sdsl::int_vector<> doc_array(sa_.size() + 1); //todo change by std::vector<std::size_t>
+//      drl::ConstructDocArray(sa_, doc_border_rank_, doc_array);
+      std::vector<uint32_t> doc_array;
+      doc_array.reserve(sa_.size() + 1);
+//      sa_.GetDocs(0, sa_.size(), doc_array);
+      sa_.GetDA(doc_array);
+
+      std::cout << "GetDocs" << std::endl;
 
       grammar::RePairEncoder<true> encoder;
       _construct(doc_array.begin(), doc_array.end(), encoder, slp_, pts_);
 
+      std::cout << "RePair" << std::endl;
+
       sdsl::store_to_file(slp_, sdsl::cache_file_name<_SLP>("slp", cconfig));
       sdsl::store_to_file(pts_, sdsl::cache_file_name<_PTS>("pts", cconfig));
     }
+
+//    std::cout << "slp_.Sigma() = " << slp_.Sigma() << std::endl;
+//    std::cout << "slp_.Start() = " << slp_.Start() << std::endl;
+//    std::cout << "slp_.SpanLength(slp_.Start()) = " << slp_.SpanLength(slp_.Start()) << std::endl;
   }
 
 //  template<typename _OI>
@@ -193,16 +392,22 @@ class PDLODA {
     std::vector<uint32_t> docs;
     docs.reserve(range.first - begin + end - range.second);
     if (span_cover.empty()) {
-      for (auto i = begin; i < end; ++i) {
-        docs.emplace_back(doc_border_rank_(sa_[i]) + 1);
-      }
+//      for (auto i = begin; i < end; ++i) {
+//        docs.emplace_back(doc_border_rank_(sa_[i]) + 1);
+//      }
+//      sa_.GetDocs(begin, end, docs);
+      get_terms_(begin, end, docs, sa_, slp_, pts_);
     } else {
-      for (auto i = begin; i < range.first; ++i) {
-        docs.emplace_back(doc_border_rank_(sa_[i]) + 1);
-      }
-      for (auto i = range.second; i < end; ++i) {
-        docs.emplace_back(doc_border_rank_(sa_[i]) + 1);
-      }
+//      for (auto i = begin; i < range.first; ++i) {
+//        docs.emplace_back(doc_border_rank_(sa_[i]) + 1);
+//      }
+//      sa_.GetDocs(begin, range.first, docs);
+      get_terms_(begin, range.first, docs, sa_, slp_, pts_);
+//      for (auto i = range.second; i < end; ++i) {
+//        docs.emplace_back(doc_border_rank_(sa_[i]) + 1);
+//      }
+//      sa_.GetDocs(range.second, end, docs);
+      get_terms_(range.second, end, docs, sa_, slp_, pts_);
     }
     sort(docs.begin(), docs.end());
     docs.erase(unique(docs.begin(), docs.end()), docs.end());
@@ -211,8 +416,8 @@ class PDLODA {
       return docs;
     }
 
-    drl::MergeSetsOneByOne(span_cover.begin(), span_cover.end(), pts_, docs);
-//    drl::MergeSetsBinaryTree(span_cover.begin(), span_cover.end(), pts_, docs);
+//    grammar::MergeSetsOneByOne(span_cover.begin(), span_cover.end(), pts_, docs);
+    grammar::MergeSetsBinaryTree(span_cover.begin(), span_cover.end(), pts_, docs);
 
 
 //    std::set<std::size_t> docs;
@@ -272,16 +477,86 @@ class PDLODA {
   }
 
  private:
-  _SA sa_;
+  const _SA &sa_;
 
-  _BitVectorDocBorder doc_border_;
-  _BitVectorDocBorderRank doc_border_rank_;
+//  _BitVectorDocBorder doc_border_;
+//  _BitVectorDocBorderRank doc_border_rank_;
 
   _SLP slp_;
   _PTS pts_;
 
   _ComputeSpanCover cover_;
+
+  _ComputeRangeTerms get_terms_;
 };
+
+
+template<typename _SA, typename _SLP, typename _PTS, typename _ComputeSpanCover, typename _ComputeRangeTerms = SAGetDocs>
+class PDLGT {
+ public:
+  typedef std::size_t size_type;
+
+  PDLGT(const _SA &_sa, const _SLP &_slp, const _PTS &_pts, _ComputeSpanCover _cover, _ComputeRangeTerms _get_terms)
+      : sa_(_sa), slp_(_slp), pts_(_pts), cover_(_cover), get_terms_(_get_terms) {}
+
+  auto SearchInRange(std::size_t _first, std::size_t _last) {
+    std::vector<std::size_t> span_cover;
+    auto range = cover_(slp_, _first, _last, back_inserter(span_cover));
+
+    std::vector<uint32_t> docs;
+    docs.reserve(range.first - _first + _last - range.second);
+    if (span_cover.empty()) {
+      get_terms_(_first, _last, docs, sa_, slp_, pts_);
+    } else {
+      get_terms_(_first, range.first, docs, sa_, slp_, pts_);
+      get_terms_(range.second, _last, docs, sa_, slp_, pts_);
+    }
+    sort(docs.begin(), docs.end());
+    docs.erase(unique(docs.begin(), docs.end()), docs.end());
+
+    if (span_cover.empty()) {
+      return docs;
+    }
+
+    grammar::MergeSetsOneByOne(span_cover.begin(), span_cover.end(), pts_, docs);
+//    grammar::MergeSetsBinaryTree(span_cover.begin(), span_cover.end(), pts_, docs);
+
+    return docs;
+  }
+
+  std::size_t serialize(std::ostream &out, sdsl::structure_tree_node *v = nullptr, std::string name = "") const {
+    std::size_t written_bytes = 0;
+    written_bytes += sdsl::serialize(slp_, out);
+    written_bytes += sdsl::serialize(pts_, out);
+
+    return written_bytes;
+  }
+
+  void load(std::istream &in) {
+    sdsl::load(slp_, in);
+    sdsl::load(pts_, in);
+  }
+
+ protected:
+  const _SA &sa_;
+
+  const _SLP &slp_;
+  const _PTS &pts_;
+
+  _ComputeSpanCover cover_;
+
+  _ComputeRangeTerms get_terms_;
+};
+
+
+template<typename _SA, typename _SLP, typename _PTS, typename _ComputeSpanCover, typename _ComputeRangeTerms = SAGetDocs>
+auto BuildPDLGT(const _SA &_sa,
+                const _SLP &_slp,
+                const _PTS &_pts,
+                _ComputeSpanCover _cover,
+                _ComputeRangeTerms _get_terms) {
+  return PDLGT<_SA, _SLP, _PTS, _ComputeSpanCover, _ComputeRangeTerms>(_sa, _slp, _pts, _cover, _get_terms);
+}
 
 }
 
