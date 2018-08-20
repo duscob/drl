@@ -12,6 +12,8 @@
 
 #include <rlcsa/rlcsa.h>
 
+#include "utils.h"
+
 
 namespace drl {
 
@@ -42,13 +44,9 @@ class CSAWrapper {
       }
       sort(pos.begin(), pos.end());
 
-//      std::cout << "Pos by CSA: " << std::endl;
-//      std::size_t i = 0;
       for (const auto &item : pos) {
-//        std::cout << ++i << "-" << item << ", ";
         doc_border_[item] = 1;
       }
-//      std::cout << std::endl;
 
       sdsl::store_to_file(doc_border_, sdsl::cache_file_name<_BitVectorDocBorder>("doc_border_", _cconfig));
     }
@@ -70,6 +68,11 @@ class CSAWrapper {
     }
   }
 
+  template<typename _Result>
+  void GetDA(_Result &_result) const {
+    GetDocs(0, csa_.size(), _result);
+  }
+
  private:
   _CSA csa_;
 
@@ -80,7 +83,7 @@ class CSAWrapper {
 
 class RLCSAWrapper {
  public:
-  RLCSAWrapper(const CSA::RLCSA &_rlcsa): rlcsa_(_rlcsa) {}
+  RLCSAWrapper(const CSA::RLCSA &_rlcsa, const std::string &_data_file) : rlcsa_(_rlcsa), data_file_(_data_file) {}
 
   auto size() const {
     return rlcsa_.getSize();
@@ -91,8 +94,22 @@ class RLCSAWrapper {
     bruteForceDocList(rlcsa_, CSA::pair_type(_first, _last - 1), &_result);
   }
 
+  template<typename _Result>
+  void GetDA(_Result &_result) const {
+    auto docarray = readDocArray(rlcsa_, data_file_);
+
+    docarray->goToItem(0);
+    while(docarray->hasNextItem()) {
+      _result.emplace_back(docarray->nextItem());
+    }
+
+    delete docarray;
+  }
+
  private:
   const CSA::RLCSA &rlcsa_;
+
+  std::string data_file_;
 };
 
 }
