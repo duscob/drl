@@ -279,6 +279,40 @@ void ComputeSpanFromBack(_VarType _var, std::size_t _length, const _SLP &_slp, _
 }
 
 
+template<typename _VarType, typename _SLP, typename _OI>
+void ComputeSpanFromRight(_VarType _var, std::size_t &_skip, std::size_t &_length, const _SLP &_slp, _OI _out) {
+  if (_slp.IsTerminal(_var)) {
+    --_skip;
+    return;
+  }
+
+  const auto &children = _slp[_var];
+  ComputeSpanFromRight(children.second, _skip, _length, _slp, _out);
+
+  if (_skip) {
+    ComputeSpanFromRight(children.first, _skip, _length, _slp, _out);
+  } else if (_length) {
+    ComputeSpanFromRight(children.first, _length, _slp, _out);
+  }
+}
+
+
+template<typename _VarType, typename _SLP, typename _OI>
+void ComputeSpanFromBack(_VarType _var, std::size_t _skip, std::size_t _length, const _SLP &_slp, _OI _out) {
+  const auto &cover = _slp.Cover(_var);
+
+  auto size = cover.size();
+
+  for (auto it = cover.end() - 1; _length && size; --size, --it) {
+    if (_skip) {
+      ComputeSpanFromRight(*it, _skip, _length, _slp, _out);
+    } else {
+      ComputeSpanFromRight(*it, _length, _slp, _out);
+    }
+  }
+}
+
+
 class LSLPGetSpan {
  public:
   template<typename _Result, typename _SA, typename _SLP, typename _PTS>
@@ -307,7 +341,13 @@ class LSLPGetSpan {
           ComputeSpanFromFront(leaf + 1, _last - next_pos, _slp, back_inserter(_result));
         }
       } else {
-        ComputeSpanFromFront(leaf, _first - pos, _last - _first, _slp, back_inserter(_result));
+        auto skip_front = _first - pos;
+        auto skip_back = next_pos - _last;
+        if (skip_front < skip_back) {
+          ComputeSpanFromFront(leaf, skip_front, _last - _first, _slp, back_inserter(_result));
+        } else {
+          ComputeSpanFromBack(leaf, skip_back, _last - _first, _slp, back_inserter(_result));
+        }
       }
     }
   }
@@ -518,8 +558,91 @@ class PDLGT {
       return docs;
     }
 
-    grammar::MergeSetsOneByOne(span_cover.begin(), span_cover.end(), pts_, docs);
-//    grammar::MergeSetsBinaryTree(span_cover.begin(), span_cover.end(), pts_, docs);
+    if (span_cover.size() < 20)
+      grammar::MergeSetsOneByOne(span_cover.begin(), span_cover.end(), pts_, docs);
+    else {
+//       grammar::MergeSetsBinaryTree(span_cover.begin(), span_cover.end(), pts_, docs);
+
+      auto _set_union = [](auto _first1, auto _last1, auto _first2, auto _last2, auto _result) -> auto {
+        return std::set_union(_first1, _last1, _first2, _last2, _result);
+      };
+      typedef decltype(docs) _Result;
+      auto _first = span_cover.begin();
+      auto _last = span_cover.end();
+      auto &_sets = pts_;
+      auto &_result = docs;
+
+      _Result tmp_merge;
+
+      auto merge_tmp = [&tmp_merge, &_set_union](const auto &set1, const auto &set2) {
+        tmp_merge.resize(set1.size() + set2.size());
+        auto last_it = _set_union(set1.begin(), set1.end(), set2.begin(), set2.end(), tmp_merge.begin());
+        tmp_merge.resize(last_it - tmp_merge.begin());
+      };
+
+      auto length = std::distance(_first, _last);
+      if (length == 1) {
+        merge_tmp(_result, _sets[*_first]);
+
+        _result.swap(tmp_merge);
+
+        return _result;
+      }
+
+      std::vector<std::pair<uint8_t, _Result>> part_results = {{1, {}}};
+      part_results.front().second.swap(_result);
+
+      while (part_results.size() != 1 || _first != _last) {
+        std::size_t size;
+        while ((size = part_results.size()) > 1
+            && (part_results[size - 1].first == part_results[size - 2].first
+                || _first == _last)) {
+          merge_tmp(part_results[size - 1].second, part_results[size - 2].second);
+
+          if (slp_.Sigma() < tmp_merge.size()) {
+            _result.swap(tmp_merge);
+
+            return _result;
+          }
+
+          part_results[size - 2].second.swap(tmp_merge);
+          ++part_results[size - 2].first;
+          part_results.pop_back();
+        }
+
+        if (_first != _last) {
+          auto next = _first + 1;
+          if (next == _last) {
+            merge_tmp(part_results.back().second, _sets[*_first]);
+
+            if (slp_.Sigma() < tmp_merge.size()) {
+              _result.swap(tmp_merge);
+
+              return _result;
+            }
+
+            part_results.back().second.swap(tmp_merge);
+            ++_first;
+          } else {
+            merge_tmp(_sets[*_first], _sets[*next]);
+
+            if (slp_.Sigma() < tmp_merge.size()) {
+              _result.swap(tmp_merge);
+
+              return _result;
+            }
+
+            part_results.emplace_back(1, std::move(tmp_merge));
+            _first += 2;
+          }
+        }
+      }
+
+      _result.swap(part_results.front().second);
+    }
+
+    sort(docs.begin(), docs.end());
+    docs.erase(unique(docs.begin(), docs.end()), docs.end());
 
     return docs;
   }
