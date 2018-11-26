@@ -65,6 +65,10 @@ endif ()
 
 if (drl_build_tools)
     cxx_executable_with_flags(build_docs_list "" "gflags;rlcsa;gomp" tool/build_docs_list.cpp)
+
+    find_package(Boost COMPONENTS filesystem system REQUIRED)
+
+    cxx_executable_with_flags(expand_doc_array "" "gflags;rlcsa;drl;${Boost_LIBRARIES}" tool/expand_doc_array.cpp)
 endif ()
 
 
