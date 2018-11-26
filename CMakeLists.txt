@@ -73,6 +73,7 @@ if (drl_build_benchmarks)
 
     find_package(Boost COMPONENTS filesystem system REQUIRED)
 
+    include_directories(benchmark/r_index)
     cxx_executable_with_flags(query_doc_list_idx_bm "" "gflags;benchmark;drl;sdsl;divsufsort;divsufsort64;${Boost_LIBRARIES}" benchmark/query_doc_list_idx_bm.cpp)
 endif ()
 

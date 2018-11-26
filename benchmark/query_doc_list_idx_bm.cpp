@@ -24,6 +24,8 @@
 #include "drl/pdloda.h"
 #include "drl/sa.h"
 
+#include "r_index/r_index.hpp"
+
 
 DEFINE_string(data, "", "Collection file.");
 DEFINE_string(patterns, "", "Patterns file.");
@@ -148,6 +150,35 @@ auto BM_query_doc_list_with_query = [](benchmark::State &st, const auto &idx, co
   st.counters["Patterns"] = ranges.size();
   st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
+};
+
+
+auto BM_r_index = [](benchmark::State &st, auto *idx, const auto &doc_border_rank, const auto &patterns) {
+  usint docc = 0;
+
+  for (auto _ : st) {
+    docc = 0;
+    for (usint i = 0; i < patterns.size(); i++) {
+      auto pat = patterns[i];
+      auto occ = idx->locate_all(pat);	//occurrences
+
+      std::vector<uint32_t> docs;
+      docs.reserve(occ.size());
+
+      for (const auto &item : occ) {
+        docs.push_back(doc_border_rank(item));
+      }
+
+      sort(docs.begin(), docs.end());
+      docs.erase(unique(docs.begin(), docs.end()), docs.end());
+
+      docc += docs.size();
+    }
+  }
+
+  st.counters["Patterns"] = patterns.size();
+  st.counters["Docs"] = docc;
+  if (FLAGS_print_size) st.counters["Size"] = sdsl::size_in_bytes(*idx);
 };
 
 
@@ -302,6 +333,38 @@ int main(int argc, char *argv[]) {
   sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
   drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
 //  std::cout << "|RLCSAWrapper| = " << rlcsa_wrapper.size() << std::endl;
+
+  // New Brute-Force algorithm using r-index
+  std::string input;
+
+  {
+    std::ifstream fs((coll_path / "data").string());
+    std::stringstream buffer;
+    buffer << fs.rdbuf();
+
+    input = buffer.str();
+  }
+
+  sdsl::bit_vector doc_border;
+  drl::ConstructDocBorder(input.begin(), input.end(), doc_border, '\0');
+  auto doc_border_rank = sdsl::bit_vector::rank_1_type(&doc_border);
+
+  std::cout << "DocBorderRank = " << doc_border_rank(input.size()) << std::endl;
+
+  ri::r_index<> r_idx;
+
+  if (!Load(r_idx, "ri", cconfig_sep_0)) {
+    std::cout << "Construct RI" << std::endl;
+
+    std::replace(input.begin(), input.end(), '\0', '\2');
+    r_idx = ri::r_index<>(input, false);
+
+    Save(r_idx, "ri", cconfig_sep_0);
+  }
+
+  // BM
+  benchmark::RegisterBenchmark("RIndex", BM_r_index, &r_idx, doc_border_rank, rows);
+
 
 
   // New algorithm's tests
