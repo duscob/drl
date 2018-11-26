@@ -40,7 +40,7 @@ set(SOURCE_FILES include/drl/doclist.h
         src/pdltree.cpp
         include/drl/construct_da.h
         include/drl/pdloda.h
-        include/drl/merge_sets.h)
+        include/drl/sa.h)
 
 set(LIBS rlcsa gomp sdsl grammar)
 
@@ -59,8 +59,6 @@ if (drl_build_tests)
 
     cxx_test_with_flags_and_args(construct_da_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/construct_da_test.cpp)
 
-    cxx_test_with_flags_and_args(merge_sets_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/merge_sets_test.cpp)
-
     cxx_test_with_flags_and_args(pdloda_test "" "gtest;gtest_main;gflags;drl;divsufsort;divsufsort64" "" test/pdloda_test.cpp)
 endif ()
 
@@ -73,7 +71,9 @@ endif ()
 if (drl_build_benchmarks)
     include(ConfigGBenchmark)
 
-    cxx_executable_with_flags(query_doc_list_idx_bm "" "gflags;benchmark;drl;sdsl;divsufsort;divsufsort64" benchmark/query_doc_list_idx_bm.cpp)
+    find_package(Boost COMPONENTS filesystem system REQUIRED)
+
+    cxx_executable_with_flags(query_doc_list_idx_bm "" "gflags;benchmark;drl;sdsl;divsufsort;divsufsort64;${Boost_LIBRARIES}" benchmark/query_doc_list_idx_bm.cpp)
 endif ()
 
 
