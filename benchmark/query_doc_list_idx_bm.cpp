@@ -47,7 +47,8 @@ auto BM_query_doc_list_brute_force_sa = [](benchmark::State &st, const auto &sa,
     }
   }
 
-  st.counters["Items"] = docc;
+  st.counters["Patterns"] = ranges.size();
+  st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = 0;
 };
 
@@ -70,7 +71,8 @@ auto BM_query_doc_list_brute_force_da = [](benchmark::State &st, const auto &idx
     }
   }
 
-  st.counters["Items"] = docc;
+  st.counters["Patterns"] = ranges.size();
+  st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
 };
 
@@ -94,7 +96,8 @@ auto BM_query_doc_list = [](benchmark::State &st, const auto &idx, const auto &r
     }
   }
 
-  st.counters["Items"] = docc;
+  st.counters["Patterns"] = ranges.size();
+  st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
 };
 
@@ -117,9 +120,11 @@ auto BM_query_doc_list_without_buffer = [](benchmark::State &st, const auto &idx
     }
   }
 
-  st.counters["Items"] = docc;
+  st.counters["Patterns"] = ranges.size();
+  st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
 };
+
 
 auto BM_query_doc_list_with_query = [](benchmark::State &st, const auto &idx, const auto &ranges) {
   if (!(idx->isOk())) {
@@ -140,9 +145,11 @@ auto BM_query_doc_list_with_query = [](benchmark::State &st, const auto &idx, co
     }
   }
 
-  st.counters["Items"] = docc;
+  st.counters["Patterns"] = ranges.size();
+  st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
 };
+
 
 auto BM_pdloda = [](benchmark::State &st, auto *idx, const auto &ranges) {
   usint docc = 0;
@@ -156,7 +163,8 @@ auto BM_pdloda = [](benchmark::State &st, auto *idx, const auto &ranges) {
     }
   }
 
-  st.counters["Items"] = docc;
+  st.counters["Patterns"] = ranges.size();
+  st.counters["Docs"] = docc;
 };
 
 auto BM_pdloda_rl = [](benchmark::State &st, auto *idx, const auto &ranges) {
@@ -171,7 +179,8 @@ auto BM_pdloda_rl = [](benchmark::State &st, auto *idx, const auto &ranges) {
     }
   }
 
-  st.counters["Items"] = docc;
+  st.counters["Patterns"] = ranges.size();
+  st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = sdsl::size_in_bytes(*idx);
 };
 
@@ -292,7 +301,7 @@ int main(int argc, char *argv[]) {
 
   sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
   drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
-  std::cout << "|RLCSAWrapper| = " << rlcsa_wrapper.size() << std::endl;
+//  std::cout << "|RLCSAWrapper| = " << rlcsa_wrapper.size() << std::endl;
 
 
   // New algorithm's tests
@@ -319,45 +328,30 @@ int main(int argc, char *argv[]) {
 
   auto bit_compress = [](sdsl::int_vector<> &_v) { sdsl::util::bit_compress(_v); };
 
-  grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>> slp_bc;
-  if (!Load(slp_bc, "slp", cconfig_sep_0)) {
-    std::cout << "Construct SLP<BC>" << std::endl;
+//  grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>> slp_bc;
+//  if (!Load(slp_bc, "slp", cconfig_sep_0)) {
+//    std::cout << "Construct SLP<BC>" << std::endl;
+//
+//    slp_bc = decltype(slp_bc)(slp, bit_compress, bit_compress);
+//
+//    Save(slp_bc, "slp", cconfig_sep_0);
+//  }
+//
+//  grammar::SampledPTS<grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>>> spts_slp_bc;
+//  if (Load(spts_slp_bc, "pts", cconfig_sep_0)) {
+//    spts_slp_bc.SetSLP(&slp_bc);
+//  } else {
+//    std::cout << "Construct SPTS" << std::endl;
+//
+//    spts_slp_bc.Compute(&slp_bc);
+//
+//    Save(spts_slp_bc, "pts", cconfig_sep_0);
+//  }
+//
+//  // BM
+//  auto pdlgt_slp_bc_spts = drl::BuildPDLGT(rlcsa_wrapper, slp_bc, spts_slp_bc, compute_span_cover_from_top, sa_docs);
+//  benchmark::RegisterBenchmark("PDLGT_slp<bc>_spts", BM_pdloda_rl, &pdlgt_slp_bc_spts, ranges);
 
-    slp_bc = decltype(slp_bc)(slp, bit_compress, bit_compress);
-
-    Save(slp_bc, "slp", cconfig_sep_0);
-  }
-
-  grammar::SampledPTS<grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>>> spts_slp_bc;
-  if (Load(spts_slp_bc, "pts", cconfig_sep_0)) {
-    spts_slp_bc.SetSLP(&slp_bc);
-  } else {
-    std::cout << "Construct SPTS" << std::endl;
-
-    spts_slp_bc.Compute(&slp_bc);
-
-    Save(spts_slp_bc, "pts", cconfig_sep_0);
-  }
-
-  // BM
-  auto pdlgt_slp_bc_spts = drl::BuildPDLGT(rlcsa_wrapper, slp_bc, spts_slp_bc, compute_span_cover_from_top, sa_docs);
-  benchmark::RegisterBenchmark("PDLGT_slp<bc>_spts", BM_pdloda_rl, &pdlgt_slp_bc_spts, ranges);
-
-  grammar::SampledSLP<> sslp;
-  grammar::Chunks<> sslp_chunks;
-  if (!Load(sslp, "slp", cconfig_sep_0) || !Load(sslp_chunks, "pts", cconfig_sep_0)) {
-    std::cout << "Construct SSLP && SSLPChunks" << std::endl;
-
-    grammar::AddSet<decltype(sslp_chunks)> add_set(sslp_chunks);
-    sslp.Compute(slp, 256, add_set, add_set, grammar::MustBeSampled<decltype(sslp_chunks)>(sslp_chunks, 16));
-
-    Save(sslp, "slp", cconfig_sep_0);
-    Save(sslp_chunks, "pts", cconfig_sep_0);
-  }
-
-  // BM
-  auto pdlgt_sslp_chunks = drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_chunks, compute_span_cover_from_bottom, sa_docs);
-  benchmark::RegisterBenchmark("PDLGT_sslp_chunks", BM_pdloda_rl, &pdlgt_sslp_chunks, ranges);
 
   grammar::CombinedSLP<> cslp;
   grammar::Chunks<> cslp_chunks;
@@ -367,8 +361,17 @@ int main(int argc, char *argv[]) {
     auto wrapper = BuildSLPWrapper(cslp);
     encoder.Encode(doc_array.begin(), doc_array.end(), wrapper);
 
+    auto span_to_big = [](const auto &_set, const auto &_lchildren, const auto &_rchildren) -> bool {
+      return 1000 <= _lchildren.size() + _rchildren.size();
+    };
+
+
     grammar::AddSet<decltype(cslp_chunks)> add_set(cslp_chunks);
-    cslp.Compute(256, add_set, add_set, grammar::MustBeSampled<decltype(cslp_chunks)>(cslp_chunks, 16));
+//    cslp.Compute(256, add_set, add_set, grammar::MustBeSampled<decltype(cslp_chunks)>(cslp_chunks, 16/*, rlcsa->getNumberOfSequences()*/));
+    cslp.Compute(256, add_set, add_set, grammar::MustBeSampled<decltype(cslp_chunks)>(
+        grammar::AreChildrenTooBig<decltype(cslp_chunks)>(cslp_chunks, 16),
+        grammar::IsEqual<decltype(cslp_chunks)>(cslp_chunks, 100)/*,
+        span_to_big*/));
 
     Save(cslp, "slp", cconfig_sep_0);
     Save(cslp_chunks, "pts", cconfig_sep_0);
@@ -378,19 +381,39 @@ int main(int argc, char *argv[]) {
   auto pdlgt_cslp_chunks = drl::BuildPDLGT(rlcsa_wrapper, cslp, cslp_chunks, compute_span_cover_from_bottom, slp_docs);
   benchmark::RegisterBenchmark("PDLGT_cslp_chunks", BM_pdloda_rl, &pdlgt_cslp_chunks, ranges);
 
+
+//  grammar::SampledSLP<> sslp;
+////  grammar::Chunks<> sslp_chunks;
+//  if (!Load(sslp, "slp", cconfig_sep_0)/* || !Load(sslp_chunks, "pts", cconfig_sep_0)*/) {
+////    std::cout << "Construct SSLP && SSLPChunks" << std::endl;
+//    std::cout << "Construct SSLP" << std::endl;
+//
+//    sslp = cslp;
+////    grammar::AddSet<decltype(sslp_chunks)> add_set(sslp_chunks);
+////    sslp.Compute(slp, 256, add_set, add_set, grammar::MustBeSampled<decltype(sslp_chunks)>(sslp_chunks, 16));
+//
+//    Save(sslp, "slp", cconfig_sep_0);
+////    Save(sslp_chunks, "pts", cconfig_sep_0);
+//  }
+//
+//  // BM
+//  auto pdlgt_sslp_chunks = drl::BuildPDLGT(rlcsa_wrapper, sslp, cslp_chunks, compute_span_cover_from_bottom, sa_docs);
+//  benchmark::RegisterBenchmark("PDLGT_sslp_chunks", BM_pdloda_rl, &pdlgt_sslp_chunks, ranges);
+
+
   grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>> sslp_chunks_bc;
   if (!Load(sslp_chunks_bc, "pts", cconfig_sep_0)) {
     std::cout << "Construct Chunks<BC>" << std::endl;
 
-    sslp_chunks_bc = decltype(sslp_chunks_bc)(sslp_chunks, bit_compress, bit_compress);
+    sslp_chunks_bc = decltype(sslp_chunks_bc)(cslp_chunks, bit_compress, bit_compress);
 
     Save(sslp_chunks_bc, "pts", cconfig_sep_0);
   }
 
-  // BM
-  auto pdlgt_sslp_chunks_bc =
-      drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_chunks_bc, compute_span_cover_from_bottom, sa_docs);
-  benchmark::RegisterBenchmark("PDLGT_sslp_chunks<bc>", BM_pdloda_rl, &pdlgt_sslp_chunks_bc, ranges);
+  // // BM
+  // auto pdlgt_sslp_chunks_bc =
+  //     drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_chunks_bc, compute_span_cover_from_bottom, sa_docs);
+  // benchmark::RegisterBenchmark("PDLGT_sslp_chunks<bc>", BM_pdloda_rl, &pdlgt_sslp_chunks_bc, ranges);
 
   // BM
   auto pdlgt_cslp_chunks_bc =
@@ -402,16 +425,16 @@ int main(int argc, char *argv[]) {
   if (!Load(sslp_gcchunks, "pts", cconfig_sep_0)) {
     std::cout << "Construct GCChunks" << std::endl;
 
-    const auto &objs = sslp_chunks.GetObjects();
-    sslp_gcchunks.Compute(objs.begin(), objs.end(), sslp_chunks, encoder_nslp);
+    const auto &objs = cslp_chunks.GetObjects();
+    sslp_gcchunks.Compute(objs.begin(), objs.end(), cslp_chunks, encoder_nslp);
 
     Save(sslp_gcchunks, "pts", cconfig_sep_0);
   }
 
-  // BM
-  auto pdlgt_sslp_gcchunks =
-      drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_gcchunks, compute_span_cover_from_bottom, sa_docs);
-  benchmark::RegisterBenchmark("PDLGT_sslp_gcchunks", BM_pdloda_rl, &pdlgt_sslp_gcchunks, ranges);
+//  // BM
+//  auto pdlgt_sslp_gcchunks =
+//      drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_gcchunks, compute_span_cover_from_bottom, sa_docs);
+//  benchmark::RegisterBenchmark("PDLGT_sslp_gcchunks", BM_pdloda_rl, &pdlgt_sslp_gcchunks, ranges);
 
   // BM
   auto pdlgt_cslp_gcchunks =
@@ -432,10 +455,10 @@ int main(int argc, char *argv[]) {
   }
 
 
-  // BM
-  auto pdlgt_sslp_gcchunks_bc =
-      drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, sa_docs);
-  benchmark::RegisterBenchmark("PDLGT_sslp_gcchunks<bc>", BM_pdloda_rl, &pdlgt_sslp_gcchunks_bc, ranges);
+//  // BM
+//  auto pdlgt_sslp_gcchunks_bc =
+//      drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, sa_docs);
+//  benchmark::RegisterBenchmark("PDLGT_sslp_gcchunks<bc>", BM_pdloda_rl, &pdlgt_sslp_gcchunks_bc, ranges);
 
   // BM
   auto pdlgt_cslp_gcchunks_bc =
@@ -471,6 +494,16 @@ int main(int argc, char *argv[]) {
   }
 
   // BM
+  auto pdlgt_lslp_bslp_chunks =
+      drl::BuildPDLGT(rlcsa_wrapper, lslp_bslp, cslp_chunks, compute_span_cover_from_bottom, lslp_docs);
+  benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_chunks", BM_pdloda_rl, &pdlgt_lslp_bslp_chunks, ranges);
+
+  // BM
+  auto pdlgt_lslp_bslp_chunks_bc =
+      drl::BuildPDLGT(rlcsa_wrapper, lslp_bslp, sslp_chunks_bc, compute_span_cover_from_bottom, lslp_docs);
+  benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_chunks<bc>", BM_pdloda_rl, &pdlgt_lslp_bslp_chunks_bc, ranges);
+
+  // BM
   auto pdlgt_lslp_bslp_gcchunks_bc =
       drl::BuildPDLGT(rlcsa_wrapper, lslp_bslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, lslp_docs);
   benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_gcchunks<bc>", BM_pdloda_rl, &pdlgt_lslp_bslp_gcchunks_bc, ranges);
@@ -491,8 +524,10 @@ int main(int argc, char *argv[]) {
   // BM
   auto pdlgt_lslp_bslp_gcchunks_bslp_bc =
       drl::BuildPDLGT(rlcsa_wrapper, lslp_bslp, sslp_gcchunks_bslp_bc, compute_span_cover_from_bottom, lslp_docs);
-  benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_gcchunks<bslp,bc>", BM_pdloda_rl, &pdlgt_lslp_bslp_gcchunks_bslp_bc, ranges);
-
+  benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_gcchunks<bslp,bc>",
+                               BM_pdloda_rl,
+                               &pdlgt_lslp_bslp_gcchunks_bslp_bc,
+                               ranges);
 
   benchmark::Initialize(&argc, argv);
   benchmark::RunSpecifiedBenchmarks();
