@@ -25,7 +25,7 @@ set(CMAKE_CXX_STANDARD 14)
 
 
 # Set common include folder for module
-set(COMMON_INCLUDES ${PROJECT_SOURCE_DIR}/include)
+set(COMMON_INCLUDES ${PROJECT_SOURCE_DIR}/include ${CMAKE_INSTALL_PREFIX}/include ${CMAKE_PREFIX_PATH}/include)
 
 include_directories(${COMMON_INCLUDES})
 
@@ -45,7 +45,9 @@ set(SOURCE_FILES include/drl/doclist.h
 find_library(RLCSA_LIB rlcsa)
 find_library(SDSL_LIB sdsl)
 find_library(GRAMMAR_LIB grammar)
-set(LIBS ${RLCSA_LIB} gomp ${SDSL_LIB} ${GRAMMAR_LIB})
+find_library(DIVSUFSORT_LIB divsufsort)
+find_library(DIVSUFSORT64_LIB divsufsort64)
+set(LIBS ${RLCSA_LIB} gomp ${SDSL_LIB} ${GRAMMAR_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
 
 add_library(drl ${SOURCE_FILES})
 target_link_libraries(drl ${LIBS})
@@ -61,9 +63,9 @@ if (drl_build_tests)
 
     include(ConfigGTest)
 
-    cxx_test_with_flags_and_args(construct_da_test "" "gtest;gtest_main;${GFLAGS_LIB};drl;divsufsort;divsufsort64" "" test/construct_da_test.cpp)
+    cxx_test_with_flags_and_args(construct_da_test "" "gtest;gtest_main;${GFLAGS_LIB};drl;${LIBS}" "" test/construct_da_test.cpp)
 
-    cxx_test_with_flags_and_args(pdloda_test "" "gtest;gtest_main;${GFLAGS_LIB};drl;divsufsort;divsufsort64" "" test/pdloda_test.cpp)
+    cxx_test_with_flags_and_args(pdloda_test "" "gtest;gtest_main;${GFLAGS_LIB};drl;${LIBS}" "" test/pdloda_test.cpp)
 endif ()
 
 
@@ -82,7 +84,7 @@ if (drl_build_benchmarks)
     find_package(Boost COMPONENTS filesystem system REQUIRED)
 
     include_directories(benchmark/r_index)
-    cxx_executable_with_flags(query_doc_list_idx_bm "" "${GFLAGS_LIB};benchmark;drl;${SDSL_LIB};divsufsort;divsufsort64;${Boost_LIBRARIES}" benchmark/query_doc_list_idx_bm.cpp)
+    cxx_executable_with_flags(query_doc_list_idx_bm "" "${GFLAGS_LIB};benchmark;drl;${LIBS};${Boost_LIBRARIES}" benchmark/query_doc_list_idx_bm.cpp)
 endif ()
 
 
