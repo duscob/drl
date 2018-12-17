@@ -21,6 +21,7 @@
 
 #include "drl/doclist.h"
 #include "drl/pdlrp.h"
+#include "drl/grammar_index.h"
 #include "drl/pdloda.h"
 #include "drl/sa.h"
 
@@ -150,6 +151,27 @@ auto BM_query_doc_list_with_query = [](benchmark::State &st, const auto &idx, co
   st.counters["Patterns"] = ranges.size();
   st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
+};
+
+
+auto BM_grammar_index = [](benchmark::State &st, auto *idx, const auto &queries) {
+  usint docc = 0;
+
+  for (auto _ : st) {
+    docc = 0;
+    for (usint i = 0; i < queries.size(); i++) {
+      auto res = idx->List(queries[i].first, queries[i].second);
+      if (res != nullptr) {
+        docc += res->size();
+        delete res;
+        res = nullptr;
+      }
+    }
+  }
+
+  st.counters["Patterns"] = queries.size();
+  st.counters["Docs"] = docc;
+  if (FLAGS_print_size) st.counters["Size"] = idx->GetSize();
 };
 
 
@@ -298,7 +320,7 @@ int main(int argc, char *argv[]) {
   benchmark::RegisterBenchmark("ILCP-D", BM_query_doc_list, std::make_shared<DoclistILCP>(*rlcsa, FLAGS_data, true),
                                rlcsa, ranges);
 
-  benchmark::RegisterBenchmark("PDL", BM_query_doc_list_without_buffer,
+  benchmark::RegisterBenchmark("PDL-BC", BM_query_doc_list_without_buffer,
                                std::make_shared<CSA::DocArray>(*rlcsa, FLAGS_data), ranges);
 
   benchmark::RegisterBenchmark("PDL-RP", BM_query_doc_list_with_query,
@@ -314,6 +336,24 @@ int main(int argc, char *argv[]) {
 
   benchmark::RegisterBenchmark("SADA-D", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true),
                                rlcsa, ranges);
+
+  /// Grammar index (Claude & Munro)
+  vector<pair<uint *, uint>> queries;
+  for (const auto &buf : rows) {
+    if (buf.length() > 0) {
+      uint *temp = new uint[buf.length()];
+      for (size_t i = 0; i < buf.length(); i++) {
+        temp[i] = (uint) (buf[i]);
+      }
+      queries.push_back(std::make_pair(temp, buf.length()));
+    }
+  }
+
+  GrammarIndex grm_idx((coll_path / "data.grammar").string());
+
+  benchmark::RegisterBenchmark("Grammar", BM_grammar_index, &grm_idx, queries);
+
+
 
   create_directories(coll_name);
 

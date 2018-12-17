@@ -25,7 +25,15 @@ set(CMAKE_CXX_STANDARD 14)
 
 
 # Set common include folder for module
-set(COMMON_INCLUDES ${PROJECT_SOURCE_DIR}/include ${CMAKE_INSTALL_PREFIX}/include ${CMAKE_PREFIX_PATH}/include)
+find_path(CDS_INCLUDE_DIR libcdsBasics.h
+        PATH_SUFFIXES cds libcds)
+message("CDS_INCLUDE_DIR = ${CDS_INCLUDE_DIR}")
+
+set(COMMON_INCLUDES
+        ${PROJECT_SOURCE_DIR}/include
+        ${CMAKE_INSTALL_PREFIX}/include
+        ${CMAKE_PREFIX_PATH}/include
+        ${CDS_INCLUDE_DIR})
 
 include_directories(${COMMON_INCLUDES})
 
@@ -40,14 +48,16 @@ set(SOURCE_FILES include/drl/doclist.h
         src/pdltree.cpp
         include/drl/construct_da.h
         include/drl/pdloda.h
-        include/drl/sa.h)
+        include/drl/sa.h
+        include/drl/grammar_index.h)
 
 find_library(RLCSA_LIB rlcsa)
 find_library(SDSL_LIB sdsl)
+find_library(CDS_LIB cds)
 find_library(GRAMMAR_LIB grammar)
 find_library(DIVSUFSORT_LIB divsufsort)
 find_library(DIVSUFSORT64_LIB divsufsort64)
-set(LIBS ${RLCSA_LIB} gomp ${SDSL_LIB} ${GRAMMAR_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
+set(LIBS ${RLCSA_LIB} gomp ${SDSL_LIB} ${CDS_LIB} ${GRAMMAR_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
 
 add_library(drl ${SOURCE_FILES})
 target_link_libraries(drl ${LIBS})
