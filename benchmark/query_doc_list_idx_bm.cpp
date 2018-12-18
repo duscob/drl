@@ -32,6 +32,9 @@ DEFINE_string(data, "", "Collection file.");
 DEFINE_string(patterns, "", "Patterns file.");
 DEFINE_bool(print_size, true, "Print size.");
 
+DEFINE_int32(bs, 256, "Block size.");
+DEFINE_int32(sf, 16, "Storing factor.");
+
 auto BM_query_doc_list_brute_force_sa = [](benchmark::State &st, const auto &sa, const auto &ranges) {
   usint docc = 0;
 
@@ -455,10 +458,13 @@ int main(int argc, char *argv[]) {
 //  auto pdlgt_slp_bc_spts = drl::BuildPDLGT(rlcsa_wrapper, slp_bc, spts_slp_bc, compute_span_cover_from_top, sa_docs);
 //  benchmark::RegisterBenchmark("PDLGT_slp<bc>_spts", BM_pdloda_rl, &pdlgt_slp_bc_spts, ranges);
 
+  auto prefix = std::to_string(FLAGS_bs) + "-" + std::to_string(FLAGS_sf);
+  auto slp_filename_prefix = prefix + "-slp";
+  auto pts_filename_prefix = prefix + "-pts";
 
   grammar::CombinedSLP<> cslp;
   grammar::Chunks<> cslp_chunks;
-  if (!Load(cslp, "slp", cconfig_sep_0) || !Load(cslp_chunks, "pts", cconfig_sep_0)) {
+  if (!Load(cslp, slp_filename_prefix, cconfig_sep_0) || !Load(cslp_chunks, pts_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct CSLP && CSLPChunks" << std::endl;
 
     auto wrapper = BuildSLPWrapper(cslp);
@@ -471,13 +477,13 @@ int main(int argc, char *argv[]) {
 
     grammar::AddSet<decltype(cslp_chunks)> add_set(cslp_chunks);
 //    cslp.Compute(256, add_set, add_set, grammar::MustBeSampled<decltype(cslp_chunks)>(cslp_chunks, 16/*, rlcsa->getNumberOfSequences()*/));
-    cslp.Compute(256, add_set, add_set, grammar::MustBeSampled<decltype(cslp_chunks)>(
-        grammar::AreChildrenTooBig<decltype(cslp_chunks)>(cslp_chunks, 16),
-        grammar::IsEqual<decltype(cslp_chunks)>(cslp_chunks, 100)/*,
+    cslp.Compute(FLAGS_bs, add_set, add_set, grammar::MustBeSampled<decltype(cslp_chunks)>(
+        grammar::AreChildrenTooBig<decltype(cslp_chunks)>(cslp_chunks, FLAGS_sf)/*,
+        grammar::IsEqual<decltype(cslp_chunks)>(cslp_chunks, 100),
         span_to_big*/));
 
-    Save(cslp, "slp", cconfig_sep_0);
-    Save(cslp_chunks, "pts", cconfig_sep_0);
+    Save(cslp, slp_filename_prefix, cconfig_sep_0);
+    Save(cslp_chunks, pts_filename_prefix, cconfig_sep_0);
   }
 
   // BM
@@ -487,7 +493,7 @@ int main(int argc, char *argv[]) {
 
 //  grammar::SampledSLP<> sslp;
 ////  grammar::Chunks<> sslp_chunks;
-//  if (!Load(sslp, "slp", cconfig_sep_0)/* || !Load(sslp_chunks, "pts", cconfig_sep_0)*/) {
+//  if (!Load(sslp, slp_filename_prefix, cconfig_sep_0)/* || !Load(sslp_chunks, pts_filename_prefix, cconfig_sep_0)*/) {
 ////    std::cout << "Construct SSLP && SSLPChunks" << std::endl;
 //    std::cout << "Construct SSLP" << std::endl;
 //
@@ -495,8 +501,8 @@ int main(int argc, char *argv[]) {
 ////    grammar::AddSet<decltype(sslp_chunks)> add_set(sslp_chunks);
 ////    sslp.Compute(slp, 256, add_set, add_set, grammar::MustBeSampled<decltype(sslp_chunks)>(sslp_chunks, 16));
 //
-//    Save(sslp, "slp", cconfig_sep_0);
-////    Save(sslp_chunks, "pts", cconfig_sep_0);
+//    Save(sslp, slp_filename_prefix, cconfig_sep_0);
+////    Save(sslp_chunks, pts_filename_prefix, cconfig_sep_0);
 //  }
 //
 //  // BM
@@ -505,12 +511,12 @@ int main(int argc, char *argv[]) {
 
 
   grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>> sslp_chunks_bc;
-  if (!Load(sslp_chunks_bc, "pts", cconfig_sep_0)) {
+  if (!Load(sslp_chunks_bc, pts_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct Chunks<BC>" << std::endl;
 
     sslp_chunks_bc = decltype(sslp_chunks_bc)(cslp_chunks, bit_compress, bit_compress);
 
-    Save(sslp_chunks_bc, "pts", cconfig_sep_0);
+    Save(sslp_chunks_bc, pts_filename_prefix, cconfig_sep_0);
   }
 
   // // BM
@@ -525,13 +531,13 @@ int main(int argc, char *argv[]) {
 
   grammar::RePairEncoder<false> encoder_nslp;
   grammar::GCChunks<grammar::SLP<>> sslp_gcchunks;
-  if (!Load(sslp_gcchunks, "pts", cconfig_sep_0)) {
+  if (!Load(sslp_gcchunks, pts_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct GCChunks" << std::endl;
 
     const auto &objs = cslp_chunks.GetObjects();
     sslp_gcchunks.Compute(objs.begin(), objs.end(), cslp_chunks, encoder_nslp);
 
-    Save(sslp_gcchunks, "pts", cconfig_sep_0);
+    Save(sslp_gcchunks, pts_filename_prefix, cconfig_sep_0);
   }
 
 //  // BM
@@ -548,13 +554,13 @@ int main(int argc, char *argv[]) {
       grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>>,
       true,
       grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>>> sslp_gcchunks_bc;
-  if (!Load(sslp_gcchunks_bc, "pts", cconfig_sep_0)) {
+  if (!Load(sslp_gcchunks_bc, pts_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct GCChunks<BC>" << std::endl;
 
     sslp_gcchunks_bc =
         decltype(sslp_gcchunks_bc)(sslp_gcchunks, bit_compress, bit_compress, bit_compress, bit_compress);
 
-    Save(sslp_gcchunks_bc, "pts", cconfig_sep_0);
+    Save(sslp_gcchunks_bc, pts_filename_prefix, cconfig_sep_0);
   }
 
 
@@ -570,12 +576,12 @@ int main(int argc, char *argv[]) {
 
 
   grammar::LightSLP<> lslp;
-  if (!Load(lslp, "slp", cconfig_sep_0)) {
+  if (!Load(lslp, slp_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct LSLP" << std::endl;
 
     lslp.Compute(doc_array.begin(), doc_array.end(), encoder_nslp, cslp);
 
-    Save(lslp, "slp", cconfig_sep_0);
+    Save(lslp, slp_filename_prefix, cconfig_sep_0);
   }
 
 
@@ -588,12 +594,12 @@ int main(int argc, char *argv[]) {
   grammar::LightSLP<grammar::BasicSLP<sdsl::int_vector<>>,
                     grammar::SampledSLP<>,
                     grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>>> lslp_bslp;
-  if (!Load(lslp_bslp, "slp", cconfig_sep_0)) {
+  if (!Load(lslp_bslp, slp_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct LBSLP" << std::endl;
 
     lslp_bslp = decltype(lslp_bslp)(lslp, bit_compress, bit_compress, bit_compress, bit_compress);
 
-    Save(lslp_bslp, "slp", cconfig_sep_0);
+    Save(lslp_bslp, slp_filename_prefix, cconfig_sep_0);
   }
 
   // BM
@@ -615,13 +621,13 @@ int main(int argc, char *argv[]) {
       grammar::BasicSLP<sdsl::int_vector<>>,
       true,
       grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>>> sslp_gcchunks_bslp_bc;
-  if (!Load(sslp_gcchunks_bslp_bc, "pts", cconfig_sep_0)) {
+  if (!Load(sslp_gcchunks_bslp_bc, pts_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct GCChunks<BSLP,BC>" << std::endl;
 
     sslp_gcchunks_bslp_bc =
         decltype(sslp_gcchunks_bslp_bc)(sslp_gcchunks, bit_compress, bit_compress, bit_compress, bit_compress);
 
-    Save(sslp_gcchunks_bslp_bc, "pts", cconfig_sep_0);
+    Save(sslp_gcchunks_bslp_bc, pts_filename_prefix, cconfig_sep_0);
   }
 
   // BM
