@@ -35,6 +35,26 @@ DEFINE_bool(print_size, true, "Print size.");
 DEFINE_int32(bs, 256, "Block size.");
 DEFINE_int32(sf, 16, "Storing factor.");
 
+
+auto BM_query_pat_match_sa = [](benchmark::State &st, const auto &sa, const auto &patterns) {
+  usint docc = 0;
+
+  for (auto _ : st) {
+    docc = 0;
+    std::vector<CSA::pair_type> ranges;
+    for (usint i = 0; i < patterns.size(); i++) {
+      CSA::pair_type result = sa->count(patterns[i]);
+      docc += CSA::length(result);
+      ranges.push_back(result);
+    }
+  }
+
+  st.counters["Patterns"] = patterns.size();
+  st.counters["Docs"] = docc;
+  if (FLAGS_print_size) st.counters["Size"] = 0;
+};
+
+
 auto BM_query_doc_list_brute_force_sa = [](benchmark::State &st, const auto &sa, const auto &ranges) {
   usint docc = 0;
 
@@ -311,6 +331,8 @@ int main(int argc, char *argv[]) {
   std::cout << "Counting:     " << seconds << " seconds (" << (megabytes / seconds) << " MB/s, "
             << (rows.size() / seconds) << " patterns/s)" << std::endl;
   std::cout << std::endl;
+
+  benchmark::RegisterBenchmark("Pattern Matching", BM_query_pat_match_sa, rlcsa, rows);
 
   benchmark::RegisterBenchmark("Brute-L", BM_query_doc_list_brute_force_sa, rlcsa, ranges);
 
