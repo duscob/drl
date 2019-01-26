@@ -13,7 +13,7 @@ do
   for bs in `cat $block_size`; do
     for sf in `cat $storing_factor` ; do
       echo "Collection $coll; block-size $bs; storing-factor $sf"
-      $benchmark --data $dir/$coll/$basename --patterns $dir/$coll/patterns --b $bs --s $sf --benchmark_counters_tabular=true --benchmark_out_format=csv --benchmark_out=$coll-$bs-$sf.csv
+      $benchmark --data $dir/$coll/$basename --patterns $dir/$coll/patterns --bs $bs --sf $sf --benchmark_counters_tabular=true --benchmark_out_format=csv --benchmark_out=$coll-$bs-$sf.csv
     done
   done
 done
