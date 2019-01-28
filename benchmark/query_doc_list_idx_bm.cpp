@@ -24,6 +24,7 @@
 #include "drl/grammar_index.h"
 #include "drl/pdloda.h"
 #include "drl/sa.h"
+#include "drl/dl_basic_scheme.h"
 
 #include "r_index/r_index.hpp"
 
