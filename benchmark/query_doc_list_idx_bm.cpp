@@ -33,8 +33,8 @@ DEFINE_string(data, "", "Collection file.");
 DEFINE_string(patterns, "", "Patterns file.");
 DEFINE_bool(print_size, true, "Print size.");
 
-DEFINE_int32(bs, 256, "Block size.");
-DEFINE_int32(sf, 16, "Storing factor.");
+DEFINE_int32(bs, 512, "Block size.");
+DEFINE_int32(sf, 4, "Storing factor.");
 
 
 auto BM_query_pat_match_sa = [](benchmark::State &st, const auto &sa, const auto &patterns) {
@@ -244,6 +244,24 @@ auto BM_pdloda = [](benchmark::State &st, auto *idx, const auto &ranges) {
   st.counters["Docs"] = docc;
 };
 
+
+auto BM_dl_scheme = [](benchmark::State &st, auto *idx, const auto &rlcsa, const auto &patterns, std::size_t _size_in_bytes = 0) {
+  usint docc = 0;
+
+  for (auto _ : st) {
+    docc = 0;
+    for (const auto &pat : patterns){
+      auto range = rlcsa->count(pat);
+      auto res = idx->list(range.first, range.second);
+      docc += res.size();
+    }
+  }
+
+  st.counters["Patterns"] = patterns.size();
+  st.counters["Docs"] = docc;
+  if (FLAGS_print_size) st.counters["Size"] = _size_in_bytes;
+};
+
 auto BM_pdloda_rl = [](benchmark::State &st, auto *idx, const auto &ranges) {
   usint docc = 0;
 
@@ -310,35 +328,82 @@ int main(int argc, char *argv[]) {
     std::cerr << "Error opening pattern file!" << std::endl;
     return 3;
   }
-  std::vector<std::string> rows;
-  CSA::readRows(pattern_file, rows, true);
+  std::vector<std::string> patterns;
+  CSA::readRows(pattern_file, patterns, true);
   pattern_file.close();
 
   // Counting
   std::vector<CSA::pair_type> ranges;
-  ranges.reserve(rows.size());
+  ranges.reserve(patterns.size());
   CSA::usint total_size = 0, total_occ = 0;
   double start = CSA::readTimer();
-  for (CSA::usint i = 0; i < rows.size(); i++) {
-    CSA::pair_type result = rlcsa->count(rows[i]);
-    total_size += rows[i].length();
+  for (CSA::usint i = 0; i < patterns.size(); i++) {
+    CSA::pair_type result = rlcsa->count(patterns[i]);
+    total_size += patterns[i].length();
     total_occ += CSA::length(result);
     ranges.push_back(result);
   }
   double seconds = CSA::readTimer() - start;
   double megabytes = total_size / (double) CSA::MEGABYTE;
-  std::cout << "Patterns:     " << rows.size() << " (" << megabytes << " MB)" << std::endl;
+  std::cout << "Patterns:     " << patterns.size() << " (" << megabytes << " MB)" << std::endl;
   std::cout << "Occurrences:  " << total_occ << std::endl;
   std::cout << "Counting:     " << seconds << " seconds (" << (megabytes / seconds) << " MB/s, "
-            << (rows.size() / seconds) << " patterns/s)" << std::endl;
+            << (patterns.size() / seconds) << " patterns/s)" << std::endl;
   std::cout << std::endl;
 
-  benchmark::RegisterBenchmark("Pattern Matching", BM_query_pat_match_sa, rlcsa, rows);
+  benchmark::RegisterBenchmark("Pattern Matching", BM_query_pat_match_sa, rlcsa, patterns);
 
   benchmark::RegisterBenchmark("Brute-L", BM_query_doc_list_brute_force_sa, rlcsa, ranges);
 
   benchmark::RegisterBenchmark("Brute-D", BM_query_doc_list_brute_force_da,
                                std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true), ranges);
+
+  benchmark::RegisterBenchmark("SADA-L", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data), rlcsa,
+                               ranges);
+
+  benchmark::RegisterBenchmark("SADA-D", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true),
+                               rlcsa, ranges);
+
+  drl::DefaultRMQ rmq_sada;
+  {
+    std::ifstream input(FLAGS_data + ".sada");
+    rmq_sada.load(input);
+  }
+
+  drl::GetDocRLCSA get_doc(rlcsa);
+
+  auto sada = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc, rlcsa->getNumberOfSequences() + 1);
+  benchmark::RegisterBenchmark("SADA-L-Dustin", BM_dl_scheme, &sada, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada));
+
+  drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
+  std::vector<uint32_t> doc_array;
+  doc_array.reserve(rlcsa_wrapper.size() + 1);
+  rlcsa_wrapper.GetDA(doc_array);
+
+  drl::GetDocDA<decltype(doc_array)> get_doc_da(doc_array);
+
+  auto sada_da = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_da, rlcsa->getNumberOfSequences() + 1);
+  benchmark::RegisterBenchmark("SADA-D-Dustin", BM_dl_scheme, &sada_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(doc_array));
+
+  sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
+
+  grammar::RePairEncoder<true> encoder;
+
+  grammar::SLP<> slp;
+  if (!Load(slp, "slp", cconfig_sep_0)) {
+    std::cout << "Construct SLP" << std::endl;
+
+    auto wrapper = BuildSLPWrapper(slp);
+    encoder.Encode(doc_array.begin(), doc_array.end(), wrapper);
+
+    Save(slp, "slp", cconfig_sep_0);
+  }
+
+  drl::GetDocGCDA<decltype(slp)> get_doc_gcda(slp);
+
+  auto sada_gcda = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_gcda, rlcsa->getNumberOfSequences() + 1);
+  benchmark::RegisterBenchmark("SADA-G-Dustin", BM_dl_scheme, &sada_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(slp));
+
 
   benchmark::RegisterBenchmark("ILCP-L", BM_query_doc_list, std::make_shared<DoclistILCP>(*rlcsa, FLAGS_data), rlcsa,
                                ranges);
@@ -357,15 +422,10 @@ int main(int argc, char *argv[]) {
 //                               std::make_shared<PDLRP>(*rlcsa, FLAGS_data, false, true),
 //                               ranges);
 
-  benchmark::RegisterBenchmark("SADA-L", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data), rlcsa,
-                               ranges);
-
-  benchmark::RegisterBenchmark("SADA-D", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true),
-                               rlcsa, ranges);
 
   /// Grammar index (Claude & Munro)
   vector<pair<uint *, uint>> queries;
-  for (const auto &buf : rows) {
+  for (const auto &buf : patterns) {
     if (buf.length() > 0) {
       uint *temp = new uint[buf.length()];
       for (size_t i = 0; i < buf.length(); i++) {
@@ -383,21 +443,19 @@ int main(int argc, char *argv[]) {
 
   create_directories(coll_name);
 
-//  std::vector<CSA::pair_type> ranges1(rows.size());
+//  std::vector<CSA::pair_type> ranges1(patterns.size());
 //  auto file_1_sep = coll_path / "data.1";
 //
 //  std::string id = sdsl::util::basename(file_1_sep.string()) + "_";
 //  sdsl::cache_config cconfig_sep_1{false, coll_name.string(), id};
 //  drl::CSAWrapper<sdsl::csa_bitcompressed<>> csa(file_1_sep.string(), (uint8_t) 1, cconfig_sep_1);
 //
-//  for (CSA::usint i = 0; i < rows.size(); i++) {
+//  for (CSA::usint i = 0; i < patterns.size(); i++) {
 //    const auto &sa = csa.GetSA();
-//    if (0 < backward_search(sa, 0, sa.size() - 1, rows[i].begin(), rows[i].end(), ranges1[i].first, ranges1[i].second))
+//    if (0 < backward_search(sa, 0, sa.size() - 1, patterns[i].begin(), patterns[i].end(), ranges1[i].first, ranges1[i].second))
 //      ++ranges1[i].second;
 //  }
 
-  sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
-  drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
 //  std::cout << "|RLCSAWrapper| = " << rlcsa_wrapper.size() << std::endl;
 
   // New Brute-Force algorithm using r-index
@@ -429,31 +487,15 @@ int main(int argc, char *argv[]) {
   }
 
   // BM
-  benchmark::RegisterBenchmark("RIndex", BM_r_index, &r_idx, doc_border_rank, rows);
+  benchmark::RegisterBenchmark("RIndex", BM_r_index, &r_idx, doc_border_rank, patterns);
 
 
 
   // New algorithm's tests
-  grammar::RePairEncoder<true> encoder;
-  std::vector<uint32_t> doc_array;
-  doc_array.reserve(rlcsa_wrapper.size() + 1);
-  rlcsa_wrapper.GetDA(doc_array);
-
-  drl::ComputeSpanCoverFromTopFunctor compute_span_cover_from_top;
   drl::ComputeSpanCoverFromBottomFunctor compute_span_cover_from_bottom;
   drl::SAGetDocs sa_docs;
   drl::SLPGetSpan slp_docs;
   drl::LSLPGetSpan lslp_docs;
-
-  grammar::SLP<> slp;
-  if (!Load(slp, "slp", cconfig_sep_0)) {
-    std::cout << "Construct SLP" << std::endl;
-
-    auto wrapper = BuildSLPWrapper(slp);
-    encoder.Encode(doc_array.begin(), doc_array.end(), wrapper);
-
-    Save(slp, "slp", cconfig_sep_0);
-  }
 
   auto bit_compress = [](sdsl::int_vector<> &_v) { sdsl::util::bit_compress(_v); };
 
