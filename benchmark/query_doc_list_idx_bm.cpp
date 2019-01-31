@@ -79,7 +79,7 @@ DEFINE_int32(sf, 4, "Storing factor.");
 //  if (FLAGS_print_size) st.counters["Size"] = 0;
 //};
 //
-//auto BM_query_doc_list_brute_force_da = [](benchmark::State &st, const auto &idx, const auto &ranges) {
+//auto BM_query_doc_list_brute_force_da = [](benchmark::State &st, const auto &idx, const auto &patterns) {
 //  if (!(idx->isOk())) {
 //    st.SkipWithError("Cannot initialize index!");
 //  }
@@ -88,8 +88,8 @@ DEFINE_int32(sf, 4, "Storing factor.");
 //
 //  for (auto _ : st) {
 //    docc = 0;
-//    for (usint i = 0; i < ranges.size(); i++) {
-//      auto res = idx->listDocumentsBrute(ranges[i]);
+//    for (usint i = 0; i < patterns.size(); i++) {
+//      auto res = idx->listDocumentsBrute(patterns[i]);
 //      if (res != nullptr) {
 //        docc += res->size();
 //        delete res;
@@ -98,12 +98,13 @@ DEFINE_int32(sf, 4, "Storing factor.");
 //    }
 //  }
 //
-//  st.counters["Patterns"] = ranges.size();
+//  st.counters["Patterns"] = patterns.size();
 //  st.counters["Docs"] = docc;
-//  if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
+//  if (FLAGS_print_size) st.counters["Size"] = idx->reportSizeBrute();
 //};
 //
-//auto BM_query_doc_list = [](benchmark::State &st, const auto &idx, const auto &rlcsa, const auto &ranges) {
+//
+//auto BM_query_doc_list = [](benchmark::State &st, const auto &idx, const auto &rlcsa, const auto &patterns) {
 //  if (!(idx->isOk())) {
 //    st.SkipWithError("Cannot initialize index!");
 //  }
@@ -113,8 +114,8 @@ DEFINE_int32(sf, 4, "Storing factor.");
 //  for (auto _ : st) {
 //    docc = 0;
 //    Doclist::found_type found(rlcsa->getNumberOfSequences(), 1);
-//    for (usint i = 0; i < ranges.size(); i++) {
-//      auto res = idx->listDocuments(ranges[i], &found);
+//    for (usint i = 0; i < patterns.size(); i++) {
+//      auto res = idx->listDocuments(patterns[i], &found);
 //      if (res != nullptr) {
 //        docc += res->size();
 //        delete res;
@@ -123,7 +124,7 @@ DEFINE_int32(sf, 4, "Storing factor.");
 //    }
 //  }
 //
-//  st.counters["Patterns"] = ranges.size();
+//  st.counters["Patterns"] = patterns.size();
 //  st.counters["Docs"] = docc;
 //  if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
 //};
@@ -394,12 +395,18 @@ int main(int argc, char *argv[]) {
   drl::GetDocRLCSA get_doc(rlcsa);
 
   drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
-  std::vector<uint32_t> doc_array;
-  doc_array.reserve(rlcsa_wrapper.size() + 1);
-  rlcsa_wrapper.GetDA(doc_array);
+  sdsl::int_vector<> da;
+  {
+    std::vector<uint32_t> doc_array;
+    doc_array.reserve(rlcsa_wrapper.size() + 1);
+    rlcsa_wrapper.GetDA(doc_array);
 
-  drl::GetDocDA<decltype(doc_array)> get_doc_da(doc_array);
-  drl::DefaultGetDocs<decltype(get_doc_da)> get_docs_da(get_doc_da);
+    grammar::Construct(da, doc_array);
+    sdsl::util::bit_compress(da);
+  }
+
+  drl::GetDocDA<decltype(da)> get_doc_da(da);
+//  drl::DefaultGetDocs<decltype(get_doc_da)> get_docs_da(get_doc_da);
 
   grammar::RePairEncoder<true> encoder;
 
@@ -408,7 +415,7 @@ int main(int argc, char *argv[]) {
     std::cout << "Construct SLP" << std::endl;
 
     auto wrapper = BuildSLPWrapper(slp);
-    encoder.Encode(doc_array.begin(), doc_array.end(), wrapper);
+    encoder.Encode(da.begin(), da.end(), wrapper);
 
     Save(slp, "slp", cconfig_sep_0);
   }
@@ -452,19 +459,20 @@ int main(int argc, char *argv[]) {
   benchmark::RegisterBenchmark("Brute-L", BM_r_index, &r_idx, doc_border_rank, patterns, sdsl::size_in_bytes(doc_border_compact) + sdsl::size_in_bytes(doc_border_rank));
 
 //  benchmark::RegisterBenchmark("Brute-D", BM_query_doc_list_brute_force_da,
-//                               std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true), ranges);
+//                               std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true), patterns);
 //
 //  benchmark::RegisterBenchmark("Brute-L-Dustin", BM_dl_brute_da, get_doc, rlcsa, patterns, 0);
 //
-//  benchmark::RegisterBenchmark("Brute-D-Dustin", BM_dl_brute_da, get_docs_da, rlcsa, patterns, sdsl::size_in_bytes(doc_array));
 
-  benchmark::RegisterBenchmark("Brute-D", BM_dl_brute_da, get_doc_gcda, rlcsa, patterns, sdsl::size_in_bytes(slp));
+  benchmark::RegisterBenchmark("Brute-D", BM_dl_brute_da, get_doc_da, rlcsa, patterns, sdsl::size_in_bytes(da));
+
+  benchmark::RegisterBenchmark("Brute-C", BM_dl_brute_da, get_doc_gcda, rlcsa, patterns, sdsl::size_in_bytes(slp));
 
 //  benchmark::RegisterBenchmark("SADA-L", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data), rlcsa,
 //                               ranges);
 //
 //  benchmark::RegisterBenchmark("SADA-D", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true),
-//                               rlcsa, ranges);
+//                               rlcsa, patterns);
 
   drl::DefaultRMQ rmq_sada;
   {
@@ -475,18 +483,18 @@ int main(int argc, char *argv[]) {
   auto sada = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc, kNDocs + 1);
   benchmark::RegisterBenchmark("SADA-L", BM_dl_scheme, &sada, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada));
 
-//  auto sada_da = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_da, kNDocs + 1);
-//  benchmark::RegisterBenchmark("SADA-D-Dustin", BM_dl_scheme, &sada_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(doc_array));
+  auto sada_da = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_da, kNDocs + 1);
+  benchmark::RegisterBenchmark("SADA-D", BM_dl_scheme, &sada_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(da));
 
   auto sada_gcda = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_gcda, kNDocs + 1);
-  benchmark::RegisterBenchmark("SADA-D", BM_dl_scheme, &sada_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(slp));
+  benchmark::RegisterBenchmark("SADA-C", BM_dl_scheme, &sada_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(slp));
 
 
 //  benchmark::RegisterBenchmark("ILCP-L", BM_query_doc_list, std::make_shared<DoclistILCP>(*rlcsa, FLAGS_data), rlcsa,
 //                               ranges);
 
 //  benchmark::RegisterBenchmark("ILCP-D", BM_query_doc_list, std::make_shared<DoclistILCP>(*rlcsa, FLAGS_data, true),
-//                               rlcsa, ranges);
+//                               rlcsa, patterns);
 
   drl::DefaultRMQ rmq_ilcp;
   std::shared_ptr<CSA::DeltaVector> run_heads_ilcp;
@@ -500,11 +508,11 @@ int main(int argc, char *argv[]) {
   auto ilcp = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc, kNDocs + 1, get_doc);
   benchmark::RegisterBenchmark("ILCP-L", BM_dl_scheme, &ilcp, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize());
 
-//  auto ilcp_da = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_da, kNDocs + 1, get_docs_da);
-//  benchmark::RegisterBenchmark("ILCP-D-Dustin", BM_dl_scheme, &ilcp_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(doc_array));
+  auto ilcp_da = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_da, kNDocs + 1, get_doc_da);
+  benchmark::RegisterBenchmark("ILCP-D", BM_dl_scheme, &ilcp_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(da));
 
   auto ilcp_gcda = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_gcda, kNDocs + 1, get_doc_gcda);
-  benchmark::RegisterBenchmark("ILCP-D", BM_dl_scheme, &ilcp_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(slp));
+  benchmark::RegisterBenchmark("ILCP-C", BM_dl_scheme, &ilcp_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(slp));
 
 
   benchmark::RegisterBenchmark("PDL-BC", BM_query_doc_list_without_buffer,
@@ -597,7 +605,7 @@ int main(int argc, char *argv[]) {
     std::cout << "Construct CSLP && CSLPChunks" << std::endl;
 
     auto wrapper = BuildSLPWrapper(cslp);
-    encoder.Encode(doc_array.begin(), doc_array.end(), wrapper);
+    encoder.Encode(da.begin(), da.end(), wrapper);
 
     auto span_to_big = [](const auto &_set, const auto &_lchildren, const auto &_rchildren) -> bool {
       return 1000 <= _lchildren.size() + _rchildren.size();
@@ -708,7 +716,7 @@ int main(int argc, char *argv[]) {
   if (!Load(lslp, slp_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct LSLP" << std::endl;
 
-    lslp.Compute(doc_array.begin(), doc_array.end(), encoder_nslp, cslp);
+    lslp.Compute(da.begin(), da.end(), encoder_nslp, cslp);
 
     Save(lslp, slp_filename_prefix, cconfig_sep_0);
   }

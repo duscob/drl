@@ -319,6 +319,13 @@ class GetDocDA {
     return da_[_k];
   }
 
+  template<typename _Report>
+  void operator()(std::size_t _b, std::size_t _e, _Report &_report) const {
+    for (auto i = _b; i <= _e; ++i) {
+      _report(da_[i]);
+    }
+  }
+
  private:
   const _DA &da_;
 };
