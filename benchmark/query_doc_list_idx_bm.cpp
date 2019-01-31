@@ -199,7 +199,7 @@ auto BM_grammar_index = [](benchmark::State &st, auto *idx, const auto &queries)
 };
 
 
-auto BM_r_index = [](benchmark::State &st, auto *idx, const auto &doc_border_rank, const auto &patterns) {
+auto BM_r_index = [](benchmark::State &st, auto *idx, const auto &doc_border_rank, const auto &patterns, std::size_t _size_in_bytes = 0) {
   usint docc = 0;
 
   for (auto _ : st) {
@@ -224,7 +224,7 @@ auto BM_r_index = [](benchmark::State &st, auto *idx, const auto &doc_border_ran
 
   st.counters["Patterns"] = patterns.size();
   st.counters["Docs"] = docc;
-  if (FLAGS_print_size) st.counters["Size"] = sdsl::size_in_bytes(*idx);
+  if (FLAGS_print_size) st.counters["Size"] = sdsl::size_in_bytes(*idx) + _size_in_bytes;
 };
 
 
@@ -357,6 +357,38 @@ int main(int argc, char *argv[]) {
 
   benchmark::RegisterBenchmark("Brute-L", BM_query_doc_list_brute_force_sa, rlcsa, ranges);
 
+  sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
+
+  // New Brute-Force algorithm using r-index
+  sdsl::bit_vector doc_border;
+  ri::r_index<> r_idx;
+  if (!Load(r_idx, "ri", cconfig_sep_0) || !Load(doc_border, "doc_border", cconfig_sep_0)) {
+    std::cout << "Construct RI" << std::endl;
+
+    std::string input;
+    {
+      std::ifstream fs((coll_path / "data").string());
+      std::stringstream buffer;
+      buffer << fs.rdbuf();
+
+      input = buffer.str();
+    }
+
+    drl::ConstructDocBorder(input.begin(), input.end(), doc_border, '\0');
+
+    std::replace(input.begin(), input.end(), '\0', '\2');
+    r_idx = ri::r_index<>(input, false);
+
+    Save(r_idx, "ri", cconfig_sep_0);
+    Save(doc_border, "doc_border", cconfig_sep_0);
+  }
+
+  sdsl::sd_vector<> doc_border_compact(doc_border);
+  auto doc_border_rank = sdsl::sd_vector<>::rank_1_type(&doc_border_compact);
+
+  // BM
+  benchmark::RegisterBenchmark("RIndex", BM_r_index, &r_idx, doc_border_rank, patterns, sdsl::size_in_bytes(doc_border_compact) + sdsl::size_in_bytes(doc_border_rank));
+
   benchmark::RegisterBenchmark("Brute-D", BM_query_doc_list_brute_force_da,
                                std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true), ranges);
 
@@ -387,7 +419,6 @@ int main(int argc, char *argv[]) {
   auto sada_da = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_da, NDocs + 1);
   benchmark::RegisterBenchmark("SADA-D-Dustin", BM_dl_scheme, &sada_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(doc_array));
 
-  sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
 
   grammar::RePairEncoder<true> encoder;
 
@@ -463,7 +494,6 @@ int main(int argc, char *argv[]) {
   benchmark::RegisterBenchmark("Grammar", BM_grammar_index, &grm_idx, queries);
 
 
-
   create_directories(coll_name);
 
 //  std::vector<CSA::pair_type> ranges1(patterns.size());
@@ -481,36 +511,7 @@ int main(int argc, char *argv[]) {
 
 //  std::cout << "|RLCSAWrapper| = " << rlcsa_wrapper.size() << std::endl;
 
-  // New Brute-Force algorithm using r-index
-  std::string input;
 
-  {
-    std::ifstream fs((coll_path / "data").string());
-    std::stringstream buffer;
-    buffer << fs.rdbuf();
-
-    input = buffer.str();
-  }
-
-  sdsl::bit_vector doc_border;
-  drl::ConstructDocBorder(input.begin(), input.end(), doc_border, '\0');
-  auto doc_border_rank = sdsl::bit_vector::rank_1_type(&doc_border);
-
-  std::cout << "DocBorderRank = " << doc_border_rank(input.size()) << std::endl;
-
-  ri::r_index<> r_idx;
-
-  if (!Load(r_idx, "ri", cconfig_sep_0)) {
-    std::cout << "Construct RI" << std::endl;
-
-    std::replace(input.begin(), input.end(), '\0', '\2');
-    r_idx = ri::r_index<>(input, false);
-
-    Save(r_idx, "ri", cconfig_sep_0);
-  }
-
-  // BM
-  benchmark::RegisterBenchmark("RIndex", BM_r_index, &r_idx, doc_border_rank, patterns);
 
 
 
