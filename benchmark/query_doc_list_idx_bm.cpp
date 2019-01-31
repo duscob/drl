@@ -322,6 +322,8 @@ int main(int argc, char *argv[]) {
   rlcsa->printInfo();
   rlcsa->reportSize(true);
 
+  const auto NDocs = rlcsa->getNumberOfSequences();
+
   // Patterns
   std::ifstream pattern_file(FLAGS_patterns.c_str(), std::ios_base::binary);
   if (!pattern_file) {
@@ -372,7 +374,7 @@ int main(int argc, char *argv[]) {
 
   drl::GetDocRLCSA get_doc(rlcsa);
 
-  auto sada = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc, rlcsa->getNumberOfSequences() + 1);
+  auto sada = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc, NDocs + 1);
   benchmark::RegisterBenchmark("SADA-L-Dustin", BM_dl_scheme, &sada, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada));
 
   drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
@@ -382,7 +384,7 @@ int main(int argc, char *argv[]) {
 
   drl::GetDocDA<decltype(doc_array)> get_doc_da(doc_array);
 
-  auto sada_da = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_da, rlcsa->getNumberOfSequences() + 1);
+  auto sada_da = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_da, NDocs + 1);
   benchmark::RegisterBenchmark("SADA-D-Dustin", BM_dl_scheme, &sada_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(doc_array));
 
   sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
@@ -401,7 +403,7 @@ int main(int argc, char *argv[]) {
 
   drl::GetDocGCDA<decltype(slp)> get_doc_gcda(slp);
 
-  auto sada_gcda = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_gcda, rlcsa->getNumberOfSequences() + 1);
+  auto sada_gcda = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_gcda, NDocs + 1);
   benchmark::RegisterBenchmark("SADA-G-Dustin", BM_dl_scheme, &sada_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(slp));
 
 
@@ -410,6 +412,27 @@ int main(int argc, char *argv[]) {
 
   benchmark::RegisterBenchmark("ILCP-D", BM_query_doc_list, std::make_shared<DoclistILCP>(*rlcsa, FLAGS_data, true),
                                rlcsa, ranges);
+
+  drl::DefaultRMQ rmq_ilcp;
+  std::shared_ptr<CSA::DeltaVector> run_heads_ilcp;
+  {
+    std::ifstream input(FLAGS_data + ".ilcp");
+    rmq_ilcp.load(input);
+
+    run_heads_ilcp.reset(new CSA::DeltaVector(input));
+  }
+
+  drl::DefaultGetDocs<decltype(get_doc)> w_get_docs_ilcp(get_doc);
+  auto ilcp = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc, NDocs + 1, get_doc);
+  benchmark::RegisterBenchmark("ILCP-L-Dustin", BM_dl_scheme, &ilcp, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize());
+
+  drl::DefaultGetDocs<decltype(get_doc_da)> w_get_docs_ilcp_da(get_doc_da);
+  auto ilcp_da = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_da, NDocs + 1, w_get_docs_ilcp_da);
+  benchmark::RegisterBenchmark("ILCP-D-Dustin", BM_dl_scheme, &ilcp_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(doc_array));
+
+  auto ilcp_gcda = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_gcda, NDocs + 1, get_doc_gcda);
+  benchmark::RegisterBenchmark("ILCP-G-Dustin", BM_dl_scheme, &ilcp_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(slp));
+
 
   benchmark::RegisterBenchmark("PDL-BC", BM_query_doc_list_without_buffer,
                                std::make_shared<CSA::DocArray>(*rlcsa, FLAGS_data), ranges);
