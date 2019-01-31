@@ -162,6 +162,124 @@ auto BuildDLSadakane(const _RMQ &_rmq, const _GetDoc &_get_doc, std::size_t _nd)
   return DLSadakane<_RMQ, _GetDoc, _Reported>{_rmq, _get_doc, _nd};
 }
 
+
+template<typename _GetDoc, typename _Reported, typename _GetDocs>
+class DLBasicILCP {
+ public:
+  DLBasicILCP(const std::shared_ptr<CSA::DeltaVector> &_run_heads,
+              _GetDoc &_get_doc,
+              std::size_t _nd,
+              _GetDocs &_get_docs) : run_heads_{
+      _run_heads}, get_doc_{_get_doc}, reported_{_nd, 0}, get_docs_{_get_docs} {}
+
+  /// Get document
+  auto operator()(std::size_t _k) const {
+    CSA::DeltaVector::Iterator iter(*run_heads_);
+
+    auto b = std::max(sp_, iter.select(_k));
+    return get_doc_(b);
+  }
+
+  /// Is reported?
+  bool operator()(std::size_t _k, uint32_t _d) const {
+    return reported_[_d];
+  }
+
+  /// Report documents
+  template<typename _Report>
+  void operator()(std::size_t _k, uint32_t _d, _Report &_report_doc) {
+    auto report = [&_report_doc, this](auto __d) {
+      _report_doc(__d);
+      reported_[__d] = 1;
+    };
+
+    report(_d);
+
+    CSA::DeltaVector::Iterator iter(*run_heads_);
+
+    auto b = std::max(sp_, iter.select(_k)) + 1;
+    auto e = std::min(ep_, iter.selectNext() - 1);
+    if (e < b) return;
+
+    get_docs_(b, e, report);
+  }
+
+  void setInitialRange(std::size_t _sp, std::size_t _ep) {
+    sp_ = _sp;
+    ep_ = _ep;
+  }
+
+  const auto &getRunHeads() const {
+    return run_heads_;
+  }
+
+ protected:
+  std::shared_ptr<CSA::DeltaVector> run_heads_;
+  const _GetDoc &get_doc_;
+
+  _Reported reported_;
+
+  _GetDocs &get_docs_;
+
+  std::size_t sp_ = 0;
+  std::size_t ep_ = 0;
+};
+
+
+template<typename _DLBasicILCP>
+class PreprocessILCP {
+ public:
+  PreprocessILCP(_DLBasicILCP &_get_docs_ilcp) : get_docs_ilcp_{_get_docs_ilcp} {}
+
+  void operator()(std::size_t &_sp, std::size_t &_ep) {
+    get_docs_ilcp_.setInitialRange(_sp, _ep);
+
+    CSA::DeltaVector::Iterator iter(*get_docs_ilcp_.getRunHeads());
+    _sp = iter.rank(_sp) - 1;
+    _ep = iter.rank(_ep) - 1;
+  }
+
+ private:
+  _DLBasicILCP &get_docs_ilcp_;
+};
+
+
+template<typename _RMQ, typename _GetDoc, typename _Reported, typename _GetDocs>
+class DLILCP
+    : public DLBasicILCP<_GetDoc, _Reported, _GetDocs>,
+      public DLBasicScheme<_RMQ,
+                           DLBasicILCP<_GetDoc, _Reported, _GetDocs>,
+                           DLBasicILCP<_GetDoc, _Reported, _GetDocs>,
+                           DLBasicILCP<_GetDoc, _Reported, _GetDocs>,
+                           PostprocessCleanReported<_Reported>,
+                           PreprocessILCP<DLBasicILCP<_GetDoc, _Reported, _GetDocs>>> {
+ public:
+  DLILCP(const _RMQ &_rmq,
+         const std::shared_ptr<CSA::DeltaVector> &_run_heads,
+         _GetDoc &_get_doc,
+         std::size_t _nd,
+         _GetDocs &_get_docs)
+      : DLBasicILCP<_GetDoc, _Reported, _GetDocs>{_run_heads, _get_doc, _nd, _get_docs},
+        DLBasicScheme<_RMQ,
+                      DLBasicILCP<_GetDoc, _Reported, _GetDocs>,
+                      DLBasicILCP<_GetDoc, _Reported, _GetDocs>,
+                      DLBasicILCP<_GetDoc, _Reported, _GetDocs>,
+                      PostprocessCleanReported<_Reported>,
+                      PreprocessILCP<DLBasicILCP<_GetDoc, _Reported, _GetDocs>>>{
+            _rmq, *this, *this, *this, PostprocessCleanReported<_Reported>{this->reported_},
+            PreprocessILCP<DLBasicILCP<_GetDoc, _Reported, _GetDocs>>{*this}} {}
+};
+
+
+template<typename _Reported, typename _RMQ, typename _GetDoc, typename _GetDocs>
+auto BuildDLILCP(const _RMQ &_rmq,
+                 const std::shared_ptr<CSA::DeltaVector> &_run_heads,
+                 _GetDoc &_get_doc,
+                 std::size_t _nd,
+                 _GetDocs &_get_docs) {
+  return DLILCP<_RMQ, _GetDoc, _Reported, _GetDocs>{_rmq, _run_heads, _get_doc, _nd, _get_docs};
+}
+
 typedef sdsl::rmq_succinct_sct<true, sdsl::bp_support_sada<256, 32, sdsl::rank_support_v5<>>> DefaultRMQ;
 
 
@@ -171,6 +289,20 @@ class GetDocRLCSA {
 
   auto operator()(std::size_t _k) const {
     return rlcsa_->getSequenceForPosition(rlcsa_->locate(_k));
+  }
+
+  template<typename _Report>
+  void operator()(std::size_t _b, std::size_t _e, _Report &_report) {
+    pair_type range(_b, _e);
+
+    usint *res = rlcsa_->locate(range);
+    rlcsa_->getSequenceForPosition(res, CSA::length(range));
+
+    for (usint i = range.first; i <= range.second; i++) {
+      _report(res[i - range.first]);
+    }
+
+    delete[] res;
   }
 
  private:
@@ -201,6 +333,14 @@ class GetDocGCDA {
     return GetDoc(slp_.Start(), _k);
   }
 
+  template<typename _Report>
+  void operator()(std::size_t _b, std::size_t _e, _Report &_report) {
+    auto l = _e - _b + 1;
+    bool all = false;
+
+    GetDocs(slp_.Start(), _b, l, _report, all);
+  }
+
   auto GetDoc(uint32_t _i, std::size_t _k) const {
     if (_k == 0 && slp_.IsTerminal(_i))
       return _i;
@@ -214,8 +354,51 @@ class GetDocGCDA {
       return GetDoc(children.second, _k - left_length);
   }
 
+  template<typename _Report>
+  void GetDocs(uint32_t _i, std::size_t _k, std::size_t &_l, _Report &_report, bool &_all) {
+    if (0 == _l)
+      return;
+
+    if (slp_.IsTerminal(_i) && (_k == 0 || _all)) {
+      _report(_i);
+
+      --_l;
+      _all = true;
+
+      return;
+    }
+
+    auto children = slp_[_i];
+
+    auto left_length = slp_.SpanLength(children.first);
+    if (_k < left_length || _all)
+      GetDocs(children.first, _k, _l, _report, _all);
+
+    if (left_length <= _k || _all) {
+      GetDocs(children.second, _k - left_length, _l, _report, _all);
+    }
+  }
+
  private:
   const _SLP &slp_;
+};
+
+
+template<typename _GetDoc>
+class DefaultGetDocs {
+ public:
+  DefaultGetDocs(_GetDoc &_get_doc) : get_doc_{_get_doc} {}
+
+  template<typename _Report>
+  void operator()(std::size_t _b, std::size_t _e, _Report &_report_doc) {
+    for (auto i = _b; i <= _e; ++i) {
+      auto d = get_doc_(i);
+      _report_doc(d);
+    }
+  }
+
+ private:
+  _GetDoc &get_doc_;
 };
 
 }
