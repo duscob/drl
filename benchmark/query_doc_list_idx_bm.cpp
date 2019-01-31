@@ -245,6 +245,34 @@ auto BM_pdloda = [](benchmark::State &st, auto *idx, const auto &ranges) {
 };
 
 
+
+auto BM_dl_brute_da = [](benchmark::State &st, const auto &get_docs, const auto &rlcsa, const auto &patterns, std::size_t _size_in_bytes = 0) {
+  usint docc = 0;
+
+  for (auto _ : st) {
+    docc = 0;
+    for (const auto &pat : patterns){
+      auto range = rlcsa->count(pat);
+
+      std::vector<uint32_t> docs;
+      docs.reserve(range.second - range.first + 1);
+      auto add_doc = [&docs](auto d) { docs.push_back(d); };
+
+      get_docs(range.first, range.second, add_doc);
+
+      sort(docs.begin(), docs.end());
+      docs.erase(unique(docs.begin(), docs.end()), docs.end());
+
+      docc += docs.size();
+    }
+  }
+
+  st.counters["Patterns"] = patterns.size();
+  st.counters["Docs"] = docc;
+  if (FLAGS_print_size) st.counters["Size"] = _size_in_bytes;
+};
+
+
 auto BM_dl_scheme = [](benchmark::State &st, auto *idx, const auto &rlcsa, const auto &patterns, std::size_t _size_in_bytes = 0) {
   usint docc = 0;
 
@@ -353,11 +381,37 @@ int main(int argc, char *argv[]) {
             << (patterns.size() / seconds) << " patterns/s)" << std::endl;
   std::cout << std::endl;
 
+  sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
+
+  drl::GetDocRLCSA get_doc(rlcsa);
+
+  drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
+  std::vector<uint32_t> doc_array;
+  doc_array.reserve(rlcsa_wrapper.size() + 1);
+  rlcsa_wrapper.GetDA(doc_array);
+
+  drl::GetDocDA<decltype(doc_array)> get_doc_da(doc_array);
+  drl::DefaultGetDocs<decltype(get_doc_da)> get_docs_da(get_doc_da);
+
+  grammar::RePairEncoder<true> encoder;
+
+  grammar::SLP<> slp;
+  if (!Load(slp, "slp", cconfig_sep_0)) {
+    std::cout << "Construct SLP" << std::endl;
+
+    auto wrapper = BuildSLPWrapper(slp);
+    encoder.Encode(doc_array.begin(), doc_array.end(), wrapper);
+
+    Save(slp, "slp", cconfig_sep_0);
+  }
+
+  drl::GetDocGCDA<decltype(slp)> get_doc_gcda(slp);
+
+
+
   benchmark::RegisterBenchmark("Pattern Matching", BM_query_pat_match_sa, rlcsa, patterns);
 
   benchmark::RegisterBenchmark("Brute-L", BM_query_doc_list_brute_force_sa, rlcsa, ranges);
-
-  sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
 
   // New Brute-Force algorithm using r-index
   sdsl::bit_vector doc_border;
@@ -392,6 +446,12 @@ int main(int argc, char *argv[]) {
   benchmark::RegisterBenchmark("Brute-D", BM_query_doc_list_brute_force_da,
                                std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true), ranges);
 
+  benchmark::RegisterBenchmark("Brute-L-Dustin", BM_dl_brute_da, get_doc, rlcsa, patterns, 0);
+
+  benchmark::RegisterBenchmark("Brute-D-Dustin", BM_dl_brute_da, get_docs_da, rlcsa, patterns, sdsl::size_in_bytes(doc_array));
+
+  benchmark::RegisterBenchmark("Brute-D-Dustin", BM_dl_brute_da, get_doc_gcda, rlcsa, patterns, sdsl::size_in_bytes(slp));
+
   benchmark::RegisterBenchmark("SADA-L", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data), rlcsa,
                                ranges);
 
@@ -404,35 +464,11 @@ int main(int argc, char *argv[]) {
     rmq_sada.load(input);
   }
 
-  drl::GetDocRLCSA get_doc(rlcsa);
-
   auto sada = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc, NDocs + 1);
   benchmark::RegisterBenchmark("SADA-L-Dustin", BM_dl_scheme, &sada, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada));
 
-  drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
-  std::vector<uint32_t> doc_array;
-  doc_array.reserve(rlcsa_wrapper.size() + 1);
-  rlcsa_wrapper.GetDA(doc_array);
-
-  drl::GetDocDA<decltype(doc_array)> get_doc_da(doc_array);
-
   auto sada_da = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_da, NDocs + 1);
   benchmark::RegisterBenchmark("SADA-D-Dustin", BM_dl_scheme, &sada_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(doc_array));
-
-
-  grammar::RePairEncoder<true> encoder;
-
-  grammar::SLP<> slp;
-  if (!Load(slp, "slp", cconfig_sep_0)) {
-    std::cout << "Construct SLP" << std::endl;
-
-    auto wrapper = BuildSLPWrapper(slp);
-    encoder.Encode(doc_array.begin(), doc_array.end(), wrapper);
-
-    Save(slp, "slp", cconfig_sep_0);
-  }
-
-  drl::GetDocGCDA<decltype(slp)> get_doc_gcda(slp);
 
   auto sada_gcda = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_gcda, NDocs + 1);
   benchmark::RegisterBenchmark("SADA-G-Dustin", BM_dl_scheme, &sada_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(slp));
@@ -453,12 +489,10 @@ int main(int argc, char *argv[]) {
     run_heads_ilcp.reset(new CSA::DeltaVector(input));
   }
 
-  drl::DefaultGetDocs<decltype(get_doc)> w_get_docs_ilcp(get_doc);
   auto ilcp = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc, NDocs + 1, get_doc);
   benchmark::RegisterBenchmark("ILCP-L-Dustin", BM_dl_scheme, &ilcp, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize());
 
-  drl::DefaultGetDocs<decltype(get_doc_da)> w_get_docs_ilcp_da(get_doc_da);
-  auto ilcp_da = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_da, NDocs + 1, w_get_docs_ilcp_da);
+  auto ilcp_da = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_da, NDocs + 1, get_docs_da);
   benchmark::RegisterBenchmark("ILCP-D-Dustin", BM_dl_scheme, &ilcp_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(doc_array));
 
   auto ilcp_gcda = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_gcda, NDocs + 1, get_doc_gcda);

@@ -292,7 +292,7 @@ class GetDocRLCSA {
   }
 
   template<typename _Report>
-  void operator()(std::size_t _b, std::size_t _e, _Report &_report) {
+  void operator()(std::size_t _b, std::size_t _e, _Report &_report) const {
     pair_type range(_b, _e);
 
     usint *res = rlcsa_->locate(range);
@@ -334,7 +334,7 @@ class GetDocGCDA {
   }
 
   template<typename _Report>
-  void operator()(std::size_t _b, std::size_t _e, _Report &_report) {
+  void operator()(std::size_t _b, std::size_t _e, _Report &_report) const {
     auto l = _e - _b + 1;
     bool all = false;
 
@@ -355,7 +355,7 @@ class GetDocGCDA {
   }
 
   template<typename _Report>
-  void GetDocs(uint32_t _i, std::size_t _k, std::size_t &_l, _Report &_report, bool &_all) {
+  void GetDocs(uint32_t _i, std::size_t _k, std::size_t &_l, _Report &_report, bool &_all) const {
     if (0 == _l)
       return;
 
@@ -390,7 +390,7 @@ class DefaultGetDocs {
   DefaultGetDocs(_GetDoc &_get_doc) : get_doc_{_get_doc} {}
 
   template<typename _Report>
-  void operator()(std::size_t _b, std::size_t _e, _Report &_report_doc) {
+  void operator()(std::size_t _b, std::size_t _e, _Report &_report_doc) const {
     for (auto i = _b; i <= _e; ++i) {
       auto d = get_doc_(i);
       _report_doc(d);
