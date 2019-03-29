@@ -16,8 +16,8 @@
 namespace drl {
 
 template<typename _RMQ, typename _GetDoc, typename _IsReported, typename _Report>
-void list_docs(std::size_t _sp, std::size_t _ep, const _RMQ &_rmq, _GetDoc &_get_doc,
-               const _IsReported &_is_reported, _Report &_report) {
+void ListDocsRMQScheme(std::size_t _sp, std::size_t _ep, const _RMQ &_rmq, _GetDoc &_get_doc,
+                       const _IsReported &_is_reported, _Report &_report) {
   if (_sp > _ep) return;
 
   auto k = _rmq(_sp, _ep);
@@ -25,8 +25,8 @@ void list_docs(std::size_t _sp, std::size_t _ep, const _RMQ &_rmq, _GetDoc &_get
 
   if (!_is_reported(k, d)) {
     _report(k, d);
-    list_docs(_sp, k - 1, _rmq, _get_doc, _is_reported, _report);
-    list_docs(k + 1, _ep, _rmq, _get_doc, _is_reported, _report);
+    ListDocsRMQScheme(_sp, k - 1, _rmq, _get_doc, _is_reported, _report);
+    ListDocsRMQScheme(k + 1, _ep, _rmq, _get_doc, _is_reported, _report);
   }
 }
 
@@ -48,7 +48,7 @@ class DLBasicScheme {
 
     preprocess_(_sp, _ep);
 
-    list_docs(_sp, _ep, rmq_, get_doc_, is_reported_, report);
+    ListDocsRMQScheme(_sp, _ep, rmq_, get_doc_, is_reported_, report);
 
     postprocess_(docs);
 
