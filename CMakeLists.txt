@@ -50,7 +50,8 @@ set(SOURCE_FILES include/drl/doclist.h
         include/drl/pdloda.h
         include/drl/sa.h
         include/drl/grammar_index.h
-        include/drl/dl_basic_scheme.h)
+        include/drl/dl_basic_scheme.h
+        include/drl/dl_sampled_tree_scheme.h)
 
 find_library(RLCSA_LIB rlcsa)
 find_library(SDSL_LIB sdsl)
