@@ -10,12 +10,22 @@
 #include <vector>
 #include <algorithm>
 
+
 namespace drl {
 
 template<typename _ComputeCover, typename _GetDocs, typename _GetDocSet, typename _MergeSets>
 class DLSampledTreeScheme {
  public:
-  auto list(std::size_t _sp, std::size_t _ep) {
+  DLSampledTreeScheme(const _ComputeCover &_compute_cover,
+                      const _GetDocs &_get_docs,
+                      const _GetDocSet &_get_doc_set,
+                      const _MergeSets &_merge_set) : compute_cover_{_compute_cover},
+                                                      get_docs_{_get_docs},
+                                                      get_doc_set_{_get_doc_set},
+                                                      merge_sets_{_merge_set} {
+  }
+
+  auto list(std::size_t _sp, std::size_t _ep) const {
     auto cover = compute_cover_(_sp, _ep);
 
     const auto &range = cover.first;
@@ -46,11 +56,23 @@ class DLSampledTreeScheme {
   }
 
  protected:
-  _ComputeCover compute_cover_;
-  _GetDocs get_docs_;
-  _GetDocSet get_doc_set_;
-  _MergeSets merge_sets_;
+  const _ComputeCover &compute_cover_;
+  const _GetDocs &get_docs_;
+  const _GetDocSet &get_doc_set_;
+  const _MergeSets &merge_sets_;
 };
+
+
+template<typename _ComputeCover, typename _GetDocs, typename _GetDocSet, typename _MergeSets>
+auto BuildDLSampledTreeScheme(const _ComputeCover &_compute_cover,
+                              const _GetDocs &_get_docs,
+                              const _GetDocSet &_get_doc_set,
+                              const _MergeSets &_merge_set) {
+  return DLSampledTreeScheme<_ComputeCover, _GetDocs, _GetDocSet, _MergeSets>(_compute_cover,
+                                                                              _get_docs,
+                                                                              _get_doc_set,
+                                                                              _merge_set);
+}
 
 
 template<typename _Tree, typename _OI>
@@ -78,12 +100,32 @@ auto ComputeCoverFromBottom(const _Tree &_tree, std::size_t _sp, std::size_t _ep
 }
 
 
-class PDLSampledTree {
+template<typename _Tree>
+class ComputeCoverBottomFunctor {
  public:
+  ComputeCoverBottomFunctor(const _Tree &_tree) : tree_(_tree) {}
+
+  auto Compute(std::size_t _sp, std::size_t _ep) const {
+    std::vector<std::size_t> nodes;
+
+    auto range = ComputeCoverFromBottom(tree_, _sp, _ep, back_inserter(nodes));
+
+    return std::make_pair(range, nodes);
+  }
+
+  auto operator()(std::size_t _sp, std::size_t _ep) const {
+    return Compute(_sp, _ep);
+  }
 
  protected:
-
+  const _Tree &tree_;
 };
+
+
+template<typename _Tree>
+auto BuildComputeCoverBottomFunctor(const _Tree &_tree) {
+  return ComputeCoverBottomFunctor<_Tree>(_tree);
+}
 
 }
 
