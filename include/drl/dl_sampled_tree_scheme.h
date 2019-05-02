@@ -34,7 +34,7 @@ class DLSampledTreeScheme {
     std::vector<uint32_t> docs;
     docs.reserve(range.first - _sp + _ep - range.second);
 
-    auto add_doc = [&docs](auto d) { docs.push_back(d); };
+    auto add_doc = [&docs](auto &&_d) { docs.emplace_back(_d); };
 
     if (nodes.empty()) {
       get_docs_(_sp, _ep, add_doc);
@@ -72,59 +72,6 @@ auto BuildDLSampledTreeScheme(const _ComputeCover &_compute_cover,
                                                                               _get_docs,
                                                                               _get_doc_set,
                                                                               _merge_set);
-}
-
-
-template<typename _Tree, typename _OI>
-auto ComputeCoverFromBottom(const _Tree &_tree, std::size_t _sp, std::size_t _ep, _OI out)
--> std::pair<decltype(_tree.Position(1)), decltype(_tree.Position(1))> {
-  auto l = _tree.Leaf(_sp);
-  if (_tree.Position(l) < _sp) ++l;
-
-  auto r = _tree.Leaf(_ep) - 1;
-
-  for (auto i = l, next = i + 1; i <= r; i = next, ++next) {
-    while (_tree.IsFirstChild(i)) {
-      auto p = _tree.Parent(i);
-      if (p.second > r + 1)
-        break;
-      i = p.first;
-      next = p.second;
-    }
-
-    out = i;
-    ++out;
-  }
-
-  return std::make_pair(_tree.Position(l), _tree.Position(r + 1));
-}
-
-
-template<typename _Tree>
-class ComputeCoverBottomFunctor {
- public:
-  ComputeCoverBottomFunctor(const _Tree &_tree) : tree_(_tree) {}
-
-  auto Compute(std::size_t _sp, std::size_t _ep) const {
-    std::vector<std::size_t> nodes;
-
-    auto range = ComputeCoverFromBottom(tree_, _sp, _ep, back_inserter(nodes));
-
-    return std::make_pair(range, nodes);
-  }
-
-  auto operator()(std::size_t _sp, std::size_t _ep) const {
-    return Compute(_sp, _ep);
-  }
-
- protected:
-  const _Tree &tree_;
-};
-
-
-template<typename _Tree>
-auto BuildComputeCoverBottomFunctor(const _Tree &_tree) {
-  return ComputeCoverBottomFunctor<_Tree>(_tree);
 }
 
 }
