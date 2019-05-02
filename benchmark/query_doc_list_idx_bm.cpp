@@ -25,6 +25,8 @@
 #include "drl/pdloda.h"
 #include "drl/sa.h"
 #include "drl/dl_basic_scheme.h"
+#include "drl/dl_sampled_tree_scheme.h"
+#include "drl/helper.h"
 
 #include "r_index/r_index.hpp"
 
@@ -193,7 +195,7 @@ auto BM_dl_scheme = [](benchmark::State &st, auto *idx, const auto &rlcsa, const
     docc = 0;
     for (const auto &pat : patterns){
       auto range = rlcsa->count(pat);
-      auto res = idx->list(range.first, range.second);
+      auto res = idx->list(range.first, range.second + 1);
       docc += res.size();
     }
   }
@@ -330,6 +332,19 @@ bool Save(const _T &_t, const std::string &_prefix, const sdsl::cache_config &_c
   return sdsl::store_to_file(_t, sdsl::cache_file_name<_T>(_prefix, _cconfig));
 }
 
+
+class MergeSetsBinTreeFunctor {
+ public:
+  template<typename _II, typename _Sets, typename _Result>
+  inline void operator()(_II _first, _II _last, const _Sets &_sets, _Result &_result) const {
+    grammar::MergeSetsBinaryTree(_first, _last, _sets, _result);
+  }
+
+  template<typename _II, typename _Sets, typename _Result, typename _SetUnion>
+  inline void operator()(_II _first, _II _last, const _Sets &_sets, _Result &_result, const _SetUnion &_set_union) const {
+    grammar::MergeSetsBinaryTree(_first, _last, _sets, _result, _set_union);
+  }
+};
 
 int main(int argc, char *argv[]) {
   gflags::AllowCommandLineReparsing();
@@ -534,7 +549,7 @@ int main(int argc, char *argv[]) {
       for (size_t i = 0; i < buf.length(); i++) {
         temp[i] = (uint) (buf[i]);
       }
-      queries.push_back(std::make_pair(temp, buf.length()));
+      queries.emplace_back(std::make_pair(temp, buf.length()));
     }
   }
 
@@ -687,6 +702,17 @@ int main(int argc, char *argv[]) {
       drl::BuildPDLGT(rlcsa_wrapper, cslp, sslp_gcchunks, compute_span_cover_from_bottom, slp_docs);
   benchmark::RegisterBenchmark("PDLGT_cslp_gcchunks", BM_pdloda_rl, &pdlgt_cslp_gcchunks, rlcsa, patterns);
 
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  auto compute_cover = drl::BuildComputeCoverBottomFunctor(cslp);
+  MergeSetsBinTreeFunctor merge;
+  drl::ExpandSLPCoverFunctor<grammar::CombinedSLP<>> slp_get_docs{cslp};
+
+  auto dl_cslp = drl::BuildDLSampledTreeScheme(compute_cover, slp_get_docs, sslp_gcchunks, merge);
+  benchmark::RegisterBenchmark("GCDA-C-PDLGT_cslp_gcchunks", BM_dl_scheme, &dl_cslp, rlcsa, patterns, 0);
+
+
   grammar::GCChunks<
       grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>>,
       true,
@@ -711,6 +737,11 @@ int main(int argc, char *argv[]) {
       drl::BuildPDLGT(rlcsa_wrapper, cslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, slp_docs);
   benchmark::RegisterBenchmark("PDLGT_cslp_gcchunks<bc>", BM_pdloda_rl, &pdlgt_cslp_gcchunks_bc, rlcsa, patterns);
 
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  auto dl_cslp_bc = drl::BuildDLSampledTreeScheme(compute_cover, slp_get_docs, sslp_gcchunks_bc, merge);
+  benchmark::RegisterBenchmark("GCDA-C-PDLGT_cslp_gcchunks<bc>", BM_dl_scheme, &dl_cslp_bc, rlcsa, patterns, 0);
 
   grammar::LightSLP<> lslp;
   if (!Load(lslp, slp_filename_prefix, cconfig_sep_0)) {
@@ -726,6 +757,16 @@ int main(int argc, char *argv[]) {
   auto pdlgt_lslp_gcchunks_bc =
       drl::BuildPDLGT(rlcsa_wrapper, lslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, lslp_docs);
   benchmark::RegisterBenchmark("PDLGT_lslp_gcchunks<bc>", BM_pdloda_rl, &pdlgt_lslp_gcchunks_bc, rlcsa, patterns);
+
+
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//  auto compute_cover = drl::BuildComputeCoverBottomFunctor(cslp);
+//  MergeSetsBinTreeFunctor merge;
+  drl::ExpandSLPFunctor<decltype(lslp)> lslp_get_docs{lslp};
+  auto dl_lslp = drl::BuildDLSampledTreeScheme(compute_cover, lslp_get_docs, sslp_gcchunks_bc, merge);
+  benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp_gcchunks<bc>", BM_dl_scheme, &dl_lslp, rlcsa, patterns, 0);
 
 
   grammar::LightSLP<grammar::BasicSLP<sdsl::int_vector<>>,
@@ -754,6 +795,13 @@ int main(int argc, char *argv[]) {
       drl::BuildPDLGT(rlcsa_wrapper, lslp_bslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, lslp_docs);
   benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_gcchunks<bc>", BM_pdloda_rl, &pdlgt_lslp_bslp_gcchunks_bc, rlcsa, patterns);
 
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  drl::ExpandSLPFunctor<decltype(lslp_bslp)> lslp_bslp_get_docs{lslp_bslp};
+  auto dl_lslp_bslp = drl::BuildDLSampledTreeScheme(compute_cover, lslp_bslp_get_docs, sslp_gcchunks_bc, merge);
+  benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp<bslp>_gcchunks<bc>", BM_dl_scheme, &dl_lslp_bslp, rlcsa, patterns, 0);
+
   grammar::GCChunks<
       grammar::BasicSLP<sdsl::int_vector<>>,
       true,
@@ -775,6 +823,12 @@ int main(int argc, char *argv[]) {
                                &pdlgt_lslp_bslp_gcchunks_bslp_bc,
                                rlcsa,
                                patterns);
+
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  auto dl_lslp_bslp_bslp = drl::BuildDLSampledTreeScheme(compute_cover, lslp_bslp_get_docs, sslp_gcchunks_bslp_bc, merge);
+  benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp<bslp>_gcchunks<bslp,bc>", BM_dl_scheme, &dl_lslp_bslp_bslp, rlcsa, patterns, 0);
 
   benchmark::Initialize(&argc, argv);
   benchmark::RunSpecifiedBenchmarks();
