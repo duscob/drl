@@ -15,17 +15,20 @@
 
 namespace drl {
 
+/**
+ * List the documents in the range [_bp, _ep) using the RMQ-based scheme.
+ */
 template<typename _RMQ, typename _GetDoc, typename _IsReported, typename _Report>
-void ListDocsRMQScheme(std::size_t _sp, std::size_t _ep, const _RMQ &_rmq, _GetDoc &_get_doc,
+void ListDocsRMQScheme(std::size_t _bp, std::size_t _ep, const _RMQ &_rmq, _GetDoc &_get_doc,
                        const _IsReported &_is_reported, _Report &_report) {
-  if (_sp > _ep) return;
+  if (_bp >= _ep) return;
 
-  auto k = _rmq(_sp, _ep);
+  auto k = _rmq(_bp, _ep - 1);
   auto d = _get_doc(k);
 
   if (!_is_reported(k, d)) {
     _report(k, d);
-    ListDocsRMQScheme(_sp, k - 1, _rmq, _get_doc, _is_reported, _report);
+    ListDocsRMQScheme(_bp, k, _rmq, _get_doc, _is_reported, _report);
     ListDocsRMQScheme(k + 1, _ep, _rmq, _get_doc, _is_reported, _report);
   }
 }
@@ -39,16 +42,16 @@ class DLBasicScheme {
       : rmq_(_rmq), get_doc_{_get_doc}, is_reported_{_is_reported}, report_{_report},
         postprocess_{_postprocess}, preprocess_{_preprocess} {}
 
-  auto list(std::size_t _sp, std::size_t _ep) {
+  auto list(std::size_t _bp, std::size_t _ep) {
     std::vector<uint32_t> docs;
     auto add_doc = [&docs](auto d) { docs.push_back(d); };
 
     auto &report__ = this->report_;
     auto report = [&report__, &add_doc](auto _k, auto _d) { report__(_k, _d, add_doc); };
 
-    preprocess_(_sp, _ep);
+    preprocess_(_bp, _ep);
 
-    ListDocsRMQScheme(_sp, _ep, rmq_, get_doc_, is_reported_, report);
+    ListDocsRMQScheme(_bp, _ep, rmq_, get_doc_, is_reported_, report);
 
     postprocess_(docs);
 
@@ -84,7 +87,7 @@ auto BuildDLScheme(const _RMQ &_rmq, _GetDoc &_get_doc, const _IsReported &_is_r
 template<typename _Reported>
 class IsReported {
  public:
-  IsReported(_Reported &_reported) : reported_{_reported} {}
+  explicit IsReported(_Reported &_reported) : reported_{_reported} {}
 
   bool operator()(std::size_t _k, uint32_t _d) const {
     return reported_[_d];
@@ -98,7 +101,7 @@ class IsReported {
 template<typename _Reported>
 class PostprocessCleanReported {
  public:
-  PostprocessCleanReported(_Reported &_bitvector) : reported_{_bitvector} {}
+  explicit PostprocessCleanReported(_Reported &_bitvector) : reported_{_bitvector} {}
 
   template<typename _Container>
   void operator()(const _Container &_result) {
@@ -115,7 +118,7 @@ class PostprocessCleanReported {
 template<typename _Reported>
 class DLBasicSadakane {
  public:
-  DLBasicSadakane(std::size_t _nd) : reported_{_nd, 0} {}
+  explicit DLBasicSadakane(std::size_t _nd) : reported_{_nd, 0} {}
 
   /// Is reported?
   bool operator()(std::size_t _k, uint32_t _d) const {
@@ -198,7 +201,7 @@ class DLBasicILCP {
     CSA::DeltaVector::Iterator iter(*run_heads_);
 
     auto b = std::max(sp_, iter.select(_k)) + 1;
-    auto e = std::min(ep_, iter.selectNext() - 1);
+    auto e = std::min(ep_, iter.selectNext()) - 1;
     if (e < b) return;
 
     get_docs_(b, e, report);
@@ -229,14 +232,14 @@ class DLBasicILCP {
 template<typename _DLBasicILCP>
 class PreprocessILCP {
  public:
-  PreprocessILCP(_DLBasicILCP &_get_docs_ilcp) : get_docs_ilcp_{_get_docs_ilcp} {}
+  explicit PreprocessILCP(_DLBasicILCP &_get_docs_ilcp) : get_docs_ilcp_{_get_docs_ilcp} {}
 
   void operator()(std::size_t &_sp, std::size_t &_ep) {
     get_docs_ilcp_.setInitialRange(_sp, _ep);
 
     CSA::DeltaVector::Iterator iter(*get_docs_ilcp_.getRunHeads());
     _sp = iter.rank(_sp) - 1;
-    _ep = iter.rank(_ep) - 1;
+    _ep = iter.rank(_ep - 1);
   }
 
  private:
@@ -285,7 +288,7 @@ typedef sdsl::rmq_succinct_sct<true, sdsl::bp_support_sada<256, 32, sdsl::rank_s
 
 class GetDocRLCSA {
  public:
-  GetDocRLCSA(const std::shared_ptr<CSA::RLCSA> &_rlcsa) : rlcsa_{_rlcsa} {}
+  explicit GetDocRLCSA(std::shared_ptr<CSA::RLCSA> _rlcsa) : rlcsa_{std::move(_rlcsa)} {}
 
   auto operator()(std::size_t _k) const {
     return rlcsa_->getSequenceForPosition(rlcsa_->locate(_k));
@@ -313,7 +316,7 @@ class GetDocRLCSA {
 template<typename _DA>
 class GetDocDA {
  public:
-  GetDocDA(_DA &_da) : da_{_da} {}
+  explicit GetDocDA(_DA &_da) : da_{_da} {}
 
   auto operator()(std::size_t _k) const {
     return da_[_k];
@@ -334,7 +337,7 @@ class GetDocDA {
 template<typename _SLP>
 class GetDocGCDA {
  public:
-  GetDocGCDA(_SLP &_slp) : slp_{_slp} {}
+  explicit GetDocGCDA(_SLP &_slp) : slp_{_slp} {}
 
   auto operator()(std::size_t _k) const {
     return GetDoc(slp_.Start(), _k);
@@ -394,7 +397,7 @@ class GetDocGCDA {
 template<typename _GetDoc>
 class DefaultGetDocs {
  public:
-  DefaultGetDocs(_GetDoc &_get_doc) : get_doc_{_get_doc} {}
+  explicit DefaultGetDocs(_GetDoc &_get_doc) : get_doc_{_get_doc} {}
 
   template<typename _Report>
   void operator()(std::size_t _b, std::size_t _e, _Report &_report_doc) const {
