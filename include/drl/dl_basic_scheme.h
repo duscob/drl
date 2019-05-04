@@ -201,8 +201,8 @@ class DLBasicILCP {
     CSA::DeltaVector::Iterator iter(*run_heads_);
 
     auto b = std::max(sp_, iter.select(_k)) + 1;
-    auto e = std::min(ep_, iter.selectNext()) - 1;
-    if (e < b) return;
+    auto e = std::min(ep_, iter.selectNext());
+    if (b >= e) return;
 
     get_docs_(b, e, report);
   }
@@ -296,7 +296,7 @@ class GetDocRLCSA {
 
   template<typename _Report>
   void operator()(std::size_t _b, std::size_t _e, _Report &_report) const {
-    pair_type range(_b, _e);
+    pair_type range(_b, _e - 1);
 
     usint *res = rlcsa_->locate(range);
     rlcsa_->getSequenceForPosition(res, CSA::length(range));
@@ -324,7 +324,7 @@ class GetDocDA {
 
   template<typename _Report>
   void operator()(std::size_t _b, std::size_t _e, _Report &_report) const {
-    for (auto i = _b; i <= _e; ++i) {
+    for (auto i = _b; i < _e; ++i) {
       _report(da_[i]);
     }
   }
@@ -345,7 +345,7 @@ class GetDocGCDA {
 
   template<typename _Report>
   void operator()(std::size_t _b, std::size_t _e, _Report &_report) const {
-    auto l = _e - _b + 1;
+    auto l = _e - _b;
     bool all = false;
 
     GetDocs(slp_.Start(), _b, l, _report, all);
