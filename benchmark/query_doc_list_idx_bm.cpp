@@ -27,6 +27,7 @@
 #include "drl/dl_basic_scheme.h"
 #include "drl/dl_sampled_tree_scheme.h"
 #include "drl/helper.h"
+#include "drl/pdl_suffix_tree.h"
 
 #include "r_index/r_index.hpp"
 
@@ -173,7 +174,7 @@ auto BM_dl_brute_da = [](benchmark::State &st, const auto &get_docs, const auto 
       docs.reserve(range.second - range.first + 1);
       auto add_doc = [&docs](auto d) { docs.push_back(d); };
 
-      get_docs(range.first, range.second, add_doc);
+      get_docs(range.first, range.second + 1, add_doc);
 
       sort(docs.begin(), docs.end());
       docs.erase(unique(docs.begin(), docs.end()), docs.end());
@@ -536,6 +537,32 @@ int main(int argc, char *argv[]) {
   benchmark::RegisterBenchmark("PDL-RP", BM_query_doc_list_with_query,
                                std::make_shared<PDLRP>(*rlcsa, FLAGS_data, false), rlcsa, patterns);
 
+//  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//  MergeSetsBinTreeFunctor merge;
+//
+//  std::shared_ptr<PDLTree> pdl_tree;
+//  std::shared_ptr<CSA::ReadBuffer> pdl_grammar;
+//  std::shared_ptr<CSA::MultiArray> pdl_blocks;
+//  {
+//    std::ifstream input(FLAGS_data + ".pdlrp", std::ios::binary);
+//
+//    pdl_tree.reset(new PDLTree(*rlcsa, input));
+//
+//    pair_type temp;
+//    input.read((char*)&temp, sizeof(temp)); // Items, bits.
+//    pdl_grammar.reset(new CSA::ReadBuffer(input, temp.first, temp.second));
+//    pdl_blocks.reset(CSA::MultiArray::readFrom(input));
+//  }
+//  auto compute_cover_st = drl::BuildComputeCoverSuffixTreeFunctor(*pdl_tree);
+//  auto get_docs_st = drl::BuildGetDocsSuffixTree(*pdl_tree, *pdl_blocks, *pdl_grammar);
+//
+//  auto dl_pdl_rp = drl::BuildDLSampledTreeScheme(compute_cover_st, get_doc, get_docs_st, merge);
+//  benchmark::RegisterBenchmark("DL-PDL-RP", BM_dl_scheme, &dl_pdl_rp, rlcsa, patterns, 0);
+
+
+
 //  benchmark::RegisterBenchmark("PDL-set", BM_query_doc_list_with_query,
 //                               std::make_shared<PDLRP>(*rlcsa, FLAGS_data, false, true),
 //                               ranges);
@@ -829,6 +856,27 @@ int main(int argc, char *argv[]) {
   //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   auto dl_lslp_bslp_bslp = drl::BuildDLSampledTreeScheme(compute_cover, lslp_bslp_get_docs, sslp_gcchunks_bslp_bc, merge);
   benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp<bslp>_gcchunks<bslp,bc>", BM_dl_scheme, &dl_lslp_bslp_bslp, rlcsa, patterns, 0);
+
+  std::shared_ptr<PDLTree> pdl_tree;
+  std::shared_ptr<CSA::ReadBuffer> pdl_grammar;
+  std::shared_ptr<CSA::MultiArray> pdl_blocks;
+  {
+    std::ifstream input(FLAGS_data + ".pdlrp", std::ios::binary);
+
+    pdl_tree.reset(new PDLTree(*rlcsa, input));
+
+    pair_type temp;
+    input.read((char*)&temp, sizeof(temp)); // Items, bits.
+    pdl_grammar.reset(new CSA::ReadBuffer(input, temp.first, temp.second));
+    pdl_blocks.reset(CSA::MultiArray::readFrom(input));
+  }
+  auto compute_cover_st = drl::BuildComputeCoverSuffixTreeFunctor(*pdl_tree);
+  auto get_docs_st = drl::BuildGetDocsSuffixTree(*pdl_tree, *pdl_blocks, *pdl_grammar);
+
+  //TODO check the error: using lslp_bslp_get_docs get less elements
+  auto dl_pdl_rp = drl::BuildDLSampledTreeScheme(compute_cover_st, lslp_bslp_get_docs, get_docs_st, merge);
+  benchmark::RegisterBenchmark("DL-PDL-RP", BM_dl_scheme, &dl_pdl_rp, rlcsa, patterns, sdsl::size_in_bytes(lslp));
+
 
   benchmark::Initialize(&argc, argv);
   benchmark::RunSpecifiedBenchmarks();
