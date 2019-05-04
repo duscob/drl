@@ -41,12 +41,12 @@ auto ComputeCoverFromBottom(const _Tree &_tree, std::size_t _bp, std::size_t _ep
 template<typename _Tree>
 class ComputeCoverBottomFunctor {
  public:
-  ComputeCoverBottomFunctor(const _Tree &_tree) : tree_(_tree) {}
+  explicit ComputeCoverBottomFunctor(const _Tree &_tree) : tree_(_tree) {}
 
   auto Compute(std::size_t _bp, std::size_t _ep) const {
     std::vector<std::size_t> nodes;
 
-    auto report = [&nodes](auto &&_value) { nodes.emplace_back(_value); };
+    auto report = [&nodes](const auto &_value) { nodes.emplace_back(_value); };
 
     auto range = ComputeCoverFromBottom(tree_, _bp, _ep, report);
 
@@ -107,7 +107,7 @@ void ExpandSLPCover(const _SLP &_slp, std::size_t _bp, std::size_t _ep, _Report 
 template<typename _SLP>
 class ExpandSLPCoverFunctor {
  public:
-  ExpandSLPCoverFunctor(_SLP &_slp) : slp_{_slp} {}
+  explicit ExpandSLPCoverFunctor(_SLP &_slp) : slp_{_slp} {}
 
   template<typename _Report>
   void operator()(std::size_t _bp, std::size_t _ep, _Report &_report) const {
@@ -296,7 +296,7 @@ void ExpandSLP(const _SLP &_slp, std::size_t _bp, std::size_t _ep, _Report &_rep
 template<typename _SLP>
 class ExpandSLPFunctor {
  public:
-  ExpandSLPFunctor(_SLP &_slp) : slp_{_slp} {}
+  explicit ExpandSLPFunctor(_SLP &_slp) : slp_{_slp} {}
 
   template<typename _Report>
   void operator()(std::size_t _bp, std::size_t _ep, _Report &_report) const {

@@ -52,7 +52,8 @@ set(SOURCE_FILES include/drl/doclist.h
         include/drl/grammar_index.h
         include/drl/dl_basic_scheme.h
         include/drl/dl_sampled_tree_scheme.h
-        include/drl/helper.h)
+        include/drl/helper.h
+        include/drl/pdl_suffix_tree.h)
 
 find_library(RLCSA_LIB rlcsa)
 find_library(SDSL_LIB sdsl)

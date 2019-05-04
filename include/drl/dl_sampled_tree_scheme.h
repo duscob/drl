@@ -34,7 +34,8 @@ class DLSampledTreeScheme {
     std::vector<uint32_t> docs;
     docs.reserve(range.first - _sp + _ep - range.second);
 
-    auto add_doc = [&docs](auto &&_d) { docs.emplace_back(_d); };
+    //TODO Use generic object to copy
+    auto add_doc = [&docs](const auto &_d) { docs.emplace_back(_d); };
 
     if (nodes.empty()) {
       get_docs_(_sp, _ep, add_doc);
