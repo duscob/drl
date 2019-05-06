@@ -154,13 +154,17 @@ void ExpandSLPFromLeft(_VarType _var, std::size_t &_length, const _SLP &_slp, _R
 
 template<typename _VarType, typename _SLP, typename _Report>
 void ExpandSLPFromFront(_VarType _var, std::size_t _length, const _SLP &_slp, _Report &_report) {
-  const auto &cover = _slp.Cover(_var);
+  do {
+    const auto &cover = _slp.Cover(_var);
 
-  auto size = cover.size();
+    auto size = cover.size();
 
-  for (auto it = cover.begin(); _length && size; --size, ++it) {
-    ExpandSLPFromLeft(*it, _length, _slp, _report);
-  }
+    for (auto it = cover.begin(); _length && size; --size, ++it) {
+      ExpandSLPFromLeft(*it, _length, _slp, _report);
+    }
+
+    ++_var;
+  } while (_length);
 }
 
 
