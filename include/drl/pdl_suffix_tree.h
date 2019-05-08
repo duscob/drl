@@ -89,6 +89,7 @@ class ComputeCoverSuffixTreeFunctor {
 
   auto Compute(std::size_t _bp, std::size_t _ep) const {
     std::vector<std::size_t> nodes;
+//    nodes.reserve((_ep - _bp));
 
     auto report = [&nodes](const auto &_value) { nodes.emplace_back(_value); };
 
@@ -129,7 +130,7 @@ class GetDocsSuffixTree {
   }
 
   template<typename _Report>
-  void addBlocks(usint first_block, usint number_of_blocks, _Report _report) const {
+  void addBlocks(usint first_block, usint number_of_blocks, _Report &_report) const {
     CSA::MultiArray::Iterator *iter = blocks_.getIterator();
     iter->goToItem(first_block, 0);
     iter->setEnd(first_block + number_of_blocks, 0);
@@ -147,10 +148,12 @@ class GetDocsSuffixTree {
 //            allDocuments(this->tree->getNumberOfDocuments(), _report);
             for (std::size_t i = 0; i < tree_.getNumberOfDocuments(); ++i) {
               _report(i);
+//              _report.emplace_back(i);
             }
             return;
           } else {
             _report(value);
+//            _report.emplace_back(value);
           }
         } else {
           value = tree_.toRule(value);
@@ -162,6 +165,39 @@ class GetDocsSuffixTree {
 
     delete iter;
 //    iter = 0;
+  }
+
+
+   template<typename _Report>
+  void addBlocks1(usint first_block, usint number_of_blocks, _Report &_report) const {
+    CSA::MultiArray::Iterator *iter = blocks_.getIterator();
+    iter->goToItem(first_block, 0);
+    iter->setEnd(first_block + number_of_blocks, 0);
+
+    while (!(iter->atEnd())) {
+      addBlocks2(iter->nextItem(), _report);
+    }
+
+    delete iter;
+  }
+
+  template<typename _Report>
+  void addBlocks2(usint value, _Report &_report) const {
+    if (tree_.isTerminal(value)) {
+      if (value == tree_.getNumberOfDocuments()) {
+        for (std::size_t i = 0; i < tree_.getNumberOfDocuments(); ++i) {
+          _report(i);
+//          _report.emplace_back(i);
+        }
+      } else {
+        _report(value);
+//        _report.emplace_back(value);
+      }
+      return;
+    }
+    value = tree_.toRule(value);
+    addBlocks2(grammar_.readItemConst(2 * value + 1), _report);
+    addBlocks2(grammar_.readItemConst(2 * value), _report);
   }
 
 //  template<typename _Report>

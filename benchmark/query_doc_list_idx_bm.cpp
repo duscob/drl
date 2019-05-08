@@ -347,6 +347,43 @@ class MergeSetsBinTreeFunctor {
   }
 };
 
+
+
+class MergeSetsTmpFunctor {
+ public:
+  template<typename _II, typename _Sets, typename _Result>
+  inline void operator()(_II _first, _II _last, const _Sets &_sets, _Result &_result) const {
+//    grammar::MergeSetsBinaryTree(_first, _last, _sets, _result);
+
+    auto report = [&_result](const auto &_value) { _result.emplace_back(_value); };
+
+//    for (auto it = _first; it != _last; ++it) {
+//      _sets.addBlocks(*it, 1, report);
+//    }
+
+    int c = 1;
+    auto prev = _first;
+    for (auto it = _first + 1; it != _last; ++it) {
+      if (*(it - 1) + 1 == *it) {
+        ++c;
+      } else {
+        _sets.addBlocks(*prev, c, report);
+        prev = it;
+        c = 1;
+      }
+    }
+    _sets.addBlocks(*prev, c, report);
+
+    sort(_result.begin(), _result.end());
+    _result.erase(unique(_result.begin(), _result.end()), _result.end());
+  }
+
+//  template<typename _II, typename _Sets, typename _Result, typename _SetUnion>
+//  inline void operator()(_II _first, _II _last, const _Sets &_sets, _Result &_result, const _SetUnion &_set_union) const {
+//    grammar::MergeSetsBinaryTree(_first, _last, _sets, _result, _set_union);
+//  }
+};
+
 int main(int argc, char *argv[]) {
   gflags::AllowCommandLineReparsing();
   gflags::ParseCommandLineFlags(&argc, &argv, false);
@@ -855,7 +892,7 @@ int main(int argc, char *argv[]) {
   //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   auto dl_lslp_bslp_bslp = drl::BuildDLSampledTreeScheme(compute_cover, lslp_bslp_get_docs, sslp_gcchunks_bslp_bc, merge);
-  benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp<bslp>_gcchunks<bslp,bc>", BM_dl_scheme, &dl_lslp_bslp_bslp, rlcsa, patterns, 0);
+  benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp<bslp>_gcchunks<bslp,bc> PDL1", BM_dl_scheme, &dl_lslp_bslp_bslp, rlcsa, patterns, 0);
 
   std::shared_ptr<PDLTree> pdl_tree;
   std::shared_ptr<CSA::ReadBuffer> pdl_grammar;
@@ -874,8 +911,9 @@ int main(int argc, char *argv[]) {
   auto get_docs_st = drl::BuildGetDocsSuffixTree(*pdl_tree, *pdl_blocks, *pdl_grammar);
 
   //TODO check the error: using lslp_bslp_get_docs get less elements
-  auto dl_pdl_rp = drl::BuildDLSampledTreeScheme(compute_cover_st, lslp_bslp_get_docs, get_docs_st, merge);
-  benchmark::RegisterBenchmark("DL-PDL-RP", BM_dl_scheme, &dl_pdl_rp, rlcsa, patterns, sdsl::size_in_bytes(lslp));
+  MergeSetsTmpFunctor merge_tmp;
+  auto dl_pdl_rp = drl::BuildDLSampledTreeScheme(compute_cover_st, lslp_bslp_get_docs, get_docs_st, merge_tmp);
+  benchmark::RegisterBenchmark("DL-PDL-RP", BM_dl_scheme, &dl_pdl_rp, rlcsa, patterns, sdsl::size_in_bytes(lslp_bslp));
 
 
   benchmark::Initialize(&argc, argv);
