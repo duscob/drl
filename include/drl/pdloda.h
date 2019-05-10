@@ -154,204 +154,7 @@ class SAGetDocs {
 };
 
 
-class SLPGetSpan {
- public:
-  template<typename _Result, typename _SA, typename _SLP, typename _PTS>
-  void operator()(std::size_t _first,
-                  std::size_t _last,
-                  _Result &_result,
-                  const _SA &_sa,
-                  const _SLP &_slp,
-                  const _PTS &_pts) const {
 
-    if (_first >= _last)
-      return;
-
-    auto leaf = _slp.Leaf(_first);
-    auto pos = _slp.Position(leaf);
-
-    while (_first < _last) {
-      std::vector<uint32_t> vars;
-      grammar::ComputeSpanCover(_slp, _first - pos, _last - pos, back_inserter(vars), _slp.Map(leaf));
-
-      for (const auto &v : vars) {
-        auto span = _slp.Span(v);
-        std::copy(span.begin(), span.end(), back_inserter(_result));
-      }
-
-      _first = pos = _slp.Position(++leaf);
-    }
-  }
-};
-
-
-template<typename _VarType, typename _SLP, typename _OI>
-void ComputeSpanFromLeft(_VarType _var, std::size_t &_length, const _SLP &_slp, _OI _out) {
-  if (_slp.IsTerminal(_var)) {
-    _out = _var;
-    ++_out;
-    --_length;
-    return;
-  }
-
-  const auto &children = _slp[_var];
-  ComputeSpanFromLeft(children.first, _length, _slp, _out);
-
-  if (_length) {
-    ComputeSpanFromLeft(children.second, _length, _slp, _out);
-  }
-}
-
-
-template<typename _VarType, typename _SLP, typename _OI>
-void ComputeSpanFromFront(_VarType _var, std::size_t _length, const _SLP &_slp, _OI _out) {
-  const auto &cover = _slp.Cover(_var);
-
-  auto size = cover.size();
-
-  for (auto it = cover.begin(); _length && size; --size, ++it) {
-    ComputeSpanFromLeft(*it, _length, _slp, _out);
-  }
-}
-
-
-template<typename _VarType, typename _SLP, typename _OI>
-void ComputeSpanFromLeft(_VarType _var, std::size_t &_skip, std::size_t &_length, const _SLP &_slp, _OI _out) {
-  if (_slp.IsTerminal(_var)) {
-    --_skip;
-    return;
-  }
-
-  const auto &children = _slp[_var];
-  ComputeSpanFromLeft(children.first, _skip, _length, _slp, _out);
-
-  if (_skip) {
-    ComputeSpanFromLeft(children.second, _skip, _length, _slp, _out);
-  } else if (_length) {
-    ComputeSpanFromLeft(children.second, _length, _slp, _out);
-  }
-}
-
-
-template<typename _VarType, typename _SLP, typename _OI>
-void ComputeSpanFromFront(_VarType _var, std::size_t _skip, std::size_t _length, const _SLP &_slp, _OI _out) {
-  const auto &cover = _slp.Cover(_var);
-
-  auto size = cover.size();
-
-  for (auto it = cover.begin(); _length && size; --size, ++it) {
-    if (_skip) {
-      ComputeSpanFromLeft(*it, _skip, _length, _slp, _out);
-    } else {
-      ComputeSpanFromLeft(*it, _length, _slp, _out);
-    }
-  }
-}
-
-
-template<typename _VarType, typename _SLP, typename _OI>
-void ComputeSpanFromRight(_VarType _var, std::size_t &_length, const _SLP &_slp, _OI _out) {
-  if (_slp.IsTerminal(_var)) {
-    _out = _var;
-    ++_out;
-    --_length;
-    return;
-  }
-
-  const auto &children = _slp[_var];
-  ComputeSpanFromRight(children.second, _length, _slp, _out);
-
-  if (_length) {
-    ComputeSpanFromRight(children.first, _length, _slp, _out);
-  }
-}
-
-
-template<typename _VarType, typename _SLP, typename _OI>
-void ComputeSpanFromBack(_VarType _var, std::size_t _length, const _SLP &_slp, _OI _out) {
-  const auto &cover = _slp.Cover(_var);
-
-  auto size = cover.size();
-
-  for (auto it = cover.end() - 1; _length && size; --size, --it) {
-    ComputeSpanFromRight(*it, _length, _slp, _out);
-  }
-}
-
-
-template<typename _VarType, typename _SLP, typename _OI>
-void ComputeSpanFromRight(_VarType _var, std::size_t &_skip, std::size_t &_length, const _SLP &_slp, _OI _out) {
-  if (_slp.IsTerminal(_var)) {
-    --_skip;
-    return;
-  }
-
-  const auto &children = _slp[_var];
-  ComputeSpanFromRight(children.second, _skip, _length, _slp, _out);
-
-  if (_skip) {
-    ComputeSpanFromRight(children.first, _skip, _length, _slp, _out);
-  } else if (_length) {
-    ComputeSpanFromRight(children.first, _length, _slp, _out);
-  }
-}
-
-
-template<typename _VarType, typename _SLP, typename _OI>
-void ComputeSpanFromBack(_VarType _var, std::size_t _skip, std::size_t _length, const _SLP &_slp, _OI _out) {
-  const auto &cover = _slp.Cover(_var);
-
-  auto size = cover.size();
-
-  for (auto it = cover.end() - 1; _length && size; --size, --it) {
-    if (_skip) {
-      ComputeSpanFromRight(*it, _skip, _length, _slp, _out);
-    } else {
-      ComputeSpanFromRight(*it, _length, _slp, _out);
-    }
-  }
-}
-
-
-class LSLPGetSpan {
- public:
-  template<typename _Result, typename _SA, typename _SLP, typename _PTS>
-  void operator()(std::size_t _first,
-                  std::size_t _last,
-                  _Result &_result,
-                  const _SA &_sa,
-                  const _SLP &_slp,
-                  const _PTS &_pts) const {
-
-    if (_first >= _last)
-      return;
-
-    auto leaf = _slp.Leaf(_first);
-    auto pos = _slp.Position(leaf);
-
-    if (pos == _first) {
-      ComputeSpanFromFront(leaf, _last - pos, _slp, back_inserter(_result));
-    } else {
-      auto next_pos = _slp.Position(leaf + 1);
-
-      if (next_pos <= _last) {
-        ComputeSpanFromBack(leaf, next_pos - _first, _slp, back_inserter(_result));
-
-        if (next_pos < _last) {
-          ComputeSpanFromFront(leaf + 1, _last - next_pos, _slp, back_inserter(_result));
-        }
-      } else {
-        auto skip_front = _first - pos;
-        auto skip_back = next_pos - _last;
-        if (skip_front < skip_back) {
-          ComputeSpanFromFront(leaf, skip_front, _last - _first, _slp, back_inserter(_result));
-        } else {
-          ComputeSpanFromBack(leaf, skip_back, _last - _first, _slp, back_inserter(_result));
-        }
-      }
-    }
-  }
-};
 
 
 //! Precomputed Document List On Document Array
@@ -478,7 +281,7 @@ class PDLODA {
     if (span_cover.empty())
       return;
 
-    std::vector<bool> set(150000, 0);
+    std::vector<bool> set(150000, false);
     std::vector<uint32_t> docs;
 //    docs.reserve()
     for (const auto &item : span_cover) {
@@ -647,7 +450,7 @@ class PDLGT {
     return docs;
   }
 
-  std::size_t serialize(std::ostream &out, sdsl::structure_tree_node *v = nullptr, std::string name = "") const {
+  std::size_t serialize(std::ostream &out, sdsl::structure_tree_node *v = nullptr, const std::string &name = "") const {
     std::size_t written_bytes = 0;
     written_bytes += sdsl::serialize(slp_, out);
     written_bytes += sdsl::serialize(pts_, out);
