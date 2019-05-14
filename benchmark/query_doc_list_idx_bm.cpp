@@ -39,108 +39,18 @@ DEFINE_bool(print_size, true, "Print size.");
 DEFINE_int32(bs, 512, "Block size.");
 DEFINE_int32(sf, 4, "Storing factor.");
 
-
-//auto BM_query_pat_match_sa = [](benchmark::State &st, const auto &sa, const auto &patterns) {
-//  usint docc = 0;
-//
-//  for (auto _ : st) {
-//    docc = 0;
-//    std::vector<CSA::pair_type> ranges;
-//    for (usint i = 0; i < patterns.size(); i++) {
-//      CSA::pair_type result = sa->count(patterns[i]);
-//      docc += CSA::length(result);
-//      ranges.push_back(result);
-//    }
-//  }
-//
-//  st.counters["Patterns"] = patterns.size();
-//  st.counters["Docs"] = docc;
-//  if (FLAGS_print_size) st.counters["Size"] = 0;
-//};
-//
-//
-//auto BM_query_doc_list_brute_force_sa = [](benchmark::State &st, const auto &sa, const auto &ranges) {
-//  usint docc = 0;
-//
-//  for (auto _ : st) {
-//    docc = 0;
-//    for (usint i = 0; i < ranges.size(); i++) {
-//      usint *docs = sa->locate(ranges[i]);
-//      if (docs != nullptr) {
-//        usint temp = CSA::length(ranges[i]);
-//        sa->getSequenceForPosition(docs, temp);
-//        CSA::sequentialSort(docs, docs + temp);
-//        docc += std::unique(docs, docs + temp) - docs;
-//        delete docs;
-//        docs = nullptr;
-//      }
-//    }
-//  }
-//
-//  st.counters["Patterns"] = ranges.size();
-//  st.counters["Docs"] = docc;
-//  if (FLAGS_print_size) st.counters["Size"] = 0;
-//};
-//
-//auto BM_query_doc_list_brute_force_da = [](benchmark::State &st, const auto &idx, const auto &patterns) {
-//  if (!(idx->isOk())) {
-//    st.SkipWithError("Cannot initialize index!");
-//  }
-//
-//  usint docc = 0;
-//
-//  for (auto _ : st) {
-//    docc = 0;
-//    for (usint i = 0; i < patterns.size(); i++) {
-//      auto res = idx->listDocumentsBrute(patterns[i]);
-//      if (res != nullptr) {
-//        docc += res->size();
-//        delete res;
-//        res = nullptr;
-//      }
-//    }
-//  }
-//
-//  st.counters["Patterns"] = patterns.size();
-//  st.counters["Docs"] = docc;
-//  if (FLAGS_print_size) st.counters["Size"] = idx->reportSizeBrute();
-//};
-//
-//
-//auto BM_query_doc_list = [](benchmark::State &st, const auto &idx, const auto &rlcsa, const auto &patterns) {
-//  if (!(idx->isOk())) {
-//    st.SkipWithError("Cannot initialize index!");
-//  }
-//
-//  usint docc = 0;
-//
-//  for (auto _ : st) {
-//    docc = 0;
-//    Doclist::found_type found(rlcsa->getNumberOfSequences(), 1);
-//    for (usint i = 0; i < patterns.size(); i++) {
-//      auto res = idx->listDocuments(patterns[i], &found);
-//      if (res != nullptr) {
-//        docc += res->size();
-//        delete res;
-//        res = nullptr;
-//      }
-//    }
-//  }
-//
-//  st.counters["Patterns"] = patterns.size();
-//  st.counters["Docs"] = docc;
-//  if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
-//};
-
-
-auto BM_r_index = [](benchmark::State &st, auto *idx, const auto &doc_border_rank, const auto &patterns, std::size_t _size_in_bytes = 0) {
+auto BM_r_index = [](benchmark::State &st,
+                     auto *idx,
+                     const auto &doc_border_rank,
+                     const auto &patterns,
+                     std::size_t _size_in_bytes = 0) {
   usint docc = 0;
 
   for (auto _ : st) {
     docc = 0;
     for (usint i = 0; i < patterns.size(); i++) {
       auto pat = patterns[i];
-      auto occ = idx->locate_all(pat);	//occurrences
+      auto occ = idx->locate_all(pat);    //occurrences
 
       std::vector<uint32_t> docs;
       docs.reserve(occ.size());
@@ -161,13 +71,16 @@ auto BM_r_index = [](benchmark::State &st, auto *idx, const auto &doc_border_ran
   if (FLAGS_print_size) st.counters["Size"] = sdsl::size_in_bytes(*idx) + _size_in_bytes;
 };
 
-
-auto BM_dl_brute_da = [](benchmark::State &st, const auto &get_docs, const auto &rlcsa, const auto &patterns, std::size_t _size_in_bytes = 0) {
+auto BM_dl_brute_da = [](benchmark::State &st,
+                         const auto &get_docs,
+                         const auto &rlcsa,
+                         const auto &patterns,
+                         std::size_t _size_in_bytes = 0) {
   usint docc = 0;
 
   for (auto _ : st) {
     docc = 0;
-    for (const auto &pat : patterns){
+    for (const auto &pat : patterns) {
       auto range = rlcsa->count(pat);
 
       std::vector<uint32_t> docs;
@@ -188,52 +101,51 @@ auto BM_dl_brute_da = [](benchmark::State &st, const auto &get_docs, const auto 
   if (FLAGS_print_size) st.counters["Size"] = _size_in_bytes;
 };
 
+auto BM_dl_scheme =
+    [](benchmark::State &st, auto *idx, const auto &rlcsa, const auto &patterns, std::size_t _size_in_bytes = 0) {
+      usint docc = 0;
 
-auto BM_dl_scheme = [](benchmark::State &st, auto *idx, const auto &rlcsa, const auto &patterns, std::size_t _size_in_bytes = 0) {
-  usint docc = 0;
-
-  for (auto _ : st) {
-    docc = 0;
-    for (const auto &pat : patterns){
-      auto range = rlcsa->count(pat);
-      auto res = idx->list(range.first, range.second + 1);
-      docc += res.size();
-    }
-  }
-
-  st.counters["Patterns"] = patterns.size();
-  st.counters["Docs"] = docc;
-  if (FLAGS_print_size) st.counters["Size"] = _size_in_bytes;
-};
-
-
-auto BM_query_doc_list_without_buffer = [](benchmark::State &st, const auto &idx, const auto &rlcsa, const auto &patterns) {
-  if (!(idx->isOk())) {
-    st.SkipWithError("Cannot initialize index!");
-  }
-
-  usint docc = 0;
-
-  for (auto _ : st) {
-    docc = 0;
-    for (const auto &pat : patterns){
-      auto range = rlcsa->count(pat);
-
-      auto res = idx->listDocuments(range);
-
-      if (res != nullptr) {
-        docc += res->size();
-        delete res;
-        res = nullptr;
+      for (auto _ : st) {
+        docc = 0;
+        for (const auto &pat : patterns) {
+          auto range = rlcsa->count(pat);
+          auto res = idx->list(range.first, range.second + 1);
+          docc += res.size();
+        }
       }
-    }
-  }
 
-  st.counters["Patterns"] = patterns.size();
-  st.counters["Docs"] = docc;
-  if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
-};
+      st.counters["Patterns"] = patterns.size();
+      st.counters["Docs"] = docc;
+      if (FLAGS_print_size) st.counters["Size"] = _size_in_bytes;
+    };
 
+auto BM_query_doc_list_without_buffer =
+    [](benchmark::State &st, const auto &idx, const auto &rlcsa, const auto &patterns) {
+      if (!(idx->isOk())) {
+        st.SkipWithError("Cannot initialize index!");
+      }
+
+      usint docc = 0;
+
+      for (auto _ : st) {
+        docc = 0;
+        for (const auto &pat : patterns) {
+          auto range = rlcsa->count(pat);
+
+          auto res = idx->listDocuments(range);
+
+          if (res != nullptr) {
+            docc += res->size();
+            delete res;
+            res = nullptr;
+          }
+        }
+      }
+
+      st.counters["Patterns"] = patterns.size();
+      st.counters["Docs"] = docc;
+      if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
+    };
 
 auto BM_query_doc_list_with_query = [](benchmark::State &st, const auto &idx, const auto &rlcsa, const auto &patterns) {
   if (!(idx->isOk())) {
@@ -244,7 +156,7 @@ auto BM_query_doc_list_with_query = [](benchmark::State &st, const auto &idx, co
 
   for (auto _ : st) {
     docc = 0;
-    for (const auto &pat : patterns){
+    for (const auto &pat : patterns) {
       auto range = rlcsa->count(pat);
 
       auto res = idx->query(range);
@@ -261,7 +173,6 @@ auto BM_query_doc_list_with_query = [](benchmark::State &st, const auto &idx, co
   st.counters["Docs"] = docc;
   if (FLAGS_print_size) st.counters["Size"] = idx->reportSize();
 };
-
 
 auto BM_grammar_index = [](benchmark::State &st, auto *idx, const auto &queries) {
   usint docc = 0;
@@ -283,29 +194,12 @@ auto BM_grammar_index = [](benchmark::State &st, auto *idx, const auto &queries)
   if (FLAGS_print_size) st.counters["Size"] = idx->GetSize();
 };
 
-
-//auto BM_pdloda = [](benchmark::State &st, auto *idx, const auto &ranges) {
-//  usint docc = 0;
-//
-//  for (auto _ : st) {
-//    docc = 0;
-//    for (usint i = 0; i < ranges.size(); i++) {
-//      auto res = idx->SearchInRange(ranges[i].first, ranges[i].second/*, std::back_inserter(res)*/);
-//      docc += res.size();
-//    }
-//  }
-//
-//  st.counters["Patterns"] = ranges.size();
-//  st.counters["Docs"] = docc;
-//};
-
-
 auto BM_pdloda_rl = [](benchmark::State &st, auto *idx, const auto &rlcsa, const auto &patterns) {
   usint docc = 0;
 
   for (auto _ : st) {
     docc = 0;
-    for (const auto &pat : patterns){
+    for (const auto &pat : patterns) {
       auto range = rlcsa->count(pat);
       auto res = idx->SearchInRange(range.first, range.second + 1);
       docc += res.size();
@@ -342,24 +236,21 @@ class MergeSetsBinTreeFunctor {
   }
 
   template<typename _II, typename _Sets, typename _Result, typename _SetUnion>
-  inline void operator()(_II _first, _II _last, const _Sets &_sets, _Result &_result, const _SetUnion &_set_union) const {
+  inline void operator()(_II _first,
+                         _II _last,
+                         const _Sets &_sets,
+                         _Result &_result,
+                         const _SetUnion &_set_union) const {
     grammar::MergeSetsBinaryTree(_first, _last, _sets, _result, _set_union);
   }
 };
 
 
-
-class MergeSetsTmpFunctor {
+class MergeSetsLinearFunctor {
  public:
   template<typename _II, typename _Sets, typename _Result>
   inline void operator()(_II _first, _II _last, const _Sets &_sets, _Result &_result) const {
-//    grammar::MergeSetsBinaryTree(_first, _last, _sets, _result);
-
     auto report = [&_result](const auto &_value) { _result.emplace_back(_value); };
-
-//    for (auto it = _first; it != _last; ++it) {
-//      _sets.addBlocks(*it, 1, report);
-//    }
 
     int c = 1;
     auto prev = _first;
@@ -384,6 +275,7 @@ class MergeSetsTmpFunctor {
 //  }
 };
 
+
 int main(int argc, char *argv[]) {
   gflags::AllowCommandLineReparsing();
   gflags::ParseCommandLineFlags(&argc, &argv, false);
@@ -406,7 +298,9 @@ int main(int argc, char *argv[]) {
 
   create_directories(coll_name);
 
-  // Index
+
+
+  // RLCSA index
   auto rlcsa = std::make_shared<CSA::RLCSA>(FLAGS_data);
   if (!(rlcsa->isOk())) { return 2; }
   rlcsa->printInfo();
@@ -414,15 +308,21 @@ int main(int argc, char *argv[]) {
 
   const auto kNDocs = rlcsa->getNumberOfSequences();
 
-  // Patterns
-  std::ifstream pattern_file(FLAGS_patterns.c_str(), std::ios_base::binary);
-  if (!pattern_file) {
-    std::cerr << "Error opening pattern file!" << std::endl;
-    return 3;
-  }
+
+
+  // Query patterns
   std::vector<std::string> patterns;
-  CSA::readRows(pattern_file, patterns, true);
-  pattern_file.close();
+  {
+    std::ifstream pattern_file(FLAGS_patterns.c_str(), std::ios_base::binary);
+    if (!pattern_file) {
+      std::cerr << "Error opening pattern file!" << std::endl;
+      return 3;
+    }
+    CSA::readRows(pattern_file, patterns, true);
+    pattern_file.close();
+  }
+
+
 
   // Counting
   std::vector<CSA::pair_type> ranges;
@@ -443,9 +343,14 @@ int main(int argc, char *argv[]) {
             << (patterns.size() / seconds) << " patterns/s)" << std::endl;
   std::cout << std::endl;
 
+
+  // General data
   sdsl::cache_config cconfig_sep_0{false, coll_name.string(), sdsl::util::basename(data_path.string()) + "_"};
 
-  drl::GetDocRLCSA get_doc(rlcsa);
+
+
+  // Get document functionalities
+  drl::GetDocRLCSA get_doc_rlcsa(rlcsa);
 
   drl::RLCSAWrapper rlcsa_wrapper(*rlcsa, data_path.string());
   sdsl::int_vector<> da;
@@ -457,6 +362,7 @@ int main(int argc, char *argv[]) {
     grammar::Construct(da, doc_array);
     sdsl::util::bit_compress(da);
   }
+  const auto kSize_da = sdsl::size_in_bytes(da);
 
   drl::GetDocDA<decltype(da)> get_doc_da(da);
 //  drl::DefaultGetDocs<decltype(get_doc_da)> get_docs_da(get_doc_da);
@@ -472,14 +378,15 @@ int main(int argc, char *argv[]) {
 
     Save(slp, "slp", cconfig_sep_0);
   }
+  const auto kSize_slp = sdsl::size_in_bytes(slp);
 
   drl::GetDocGCDA<decltype(slp)> get_doc_gcda(slp);
 
 
 
-//  benchmark::RegisterBenchmark("Pattern Matching", BM_query_pat_match_sa, rlcsa, patterns);
-
-//  benchmark::RegisterBenchmark("Brute-L", BM_query_doc_list_brute_force_sa, rlcsa, ranges);
+  //*************
+  // Brute-Force
+  //*************
 
   // New Brute-Force algorithm using r-index
   sdsl::bit_vector doc_border;
@@ -509,45 +416,44 @@ int main(int argc, char *argv[]) {
   auto doc_border_rank = sdsl::sd_vector<>::rank_1_type(&doc_border_compact);
 
   // BM
-  benchmark::RegisterBenchmark("Brute-L", BM_r_index, &r_idx, doc_border_rank, patterns, sdsl::size_in_bytes(doc_border_compact) + sdsl::size_in_bytes(doc_border_rank));
+  benchmark::RegisterBenchmark("Brute-L",
+                               BM_r_index,
+                               &r_idx,
+                               doc_border_rank,
+                               patterns,
+                               sdsl::size_in_bytes(doc_border_compact) + sdsl::size_in_bytes(doc_border_rank));
 
-//  benchmark::RegisterBenchmark("Brute-D", BM_query_doc_list_brute_force_da,
-//                               std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true), patterns);
-//
-//  benchmark::RegisterBenchmark("Brute-L-Dustin", BM_dl_brute_da, get_doc, rlcsa, patterns, 0);
-//
+  benchmark::RegisterBenchmark("Brute-D", BM_dl_brute_da, get_doc_da, rlcsa, patterns, kSize_da);
 
-  benchmark::RegisterBenchmark("Brute-D", BM_dl_brute_da, get_doc_da, rlcsa, patterns, sdsl::size_in_bytes(da));
+  benchmark::RegisterBenchmark("Brute-C", BM_dl_brute_da, get_doc_gcda, rlcsa, patterns, kSize_slp);
 
-  benchmark::RegisterBenchmark("Brute-C", BM_dl_brute_da, get_doc_gcda, rlcsa, patterns, sdsl::size_in_bytes(slp));
 
-//  benchmark::RegisterBenchmark("SADA-L", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data), rlcsa,
-//                               ranges);
-//
-//  benchmark::RegisterBenchmark("SADA-D", BM_query_doc_list, std::make_shared<DoclistSada>(*rlcsa, FLAGS_data, true),
-//                               rlcsa, patterns);
+
+  //**********
+  // Sadakane
+  //**********
 
   drl::DefaultRMQ rmq_sada;
   {
     std::ifstream input(FLAGS_data + ".sada");
     rmq_sada.load(input);
   }
+  const auto kSize_rmq_sada = sdsl::size_in_bytes(rmq_sada);
 
-  auto sada = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc, kNDocs + 1);
-  benchmark::RegisterBenchmark("SADA-L", BM_dl_scheme, &sada, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada));
+  auto sada = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_rlcsa, kNDocs + 1);
+  benchmark::RegisterBenchmark("SADA-L", BM_dl_scheme, &sada, rlcsa, patterns, kSize_rmq_sada);
 
   auto sada_da = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_da, kNDocs + 1);
-  benchmark::RegisterBenchmark("SADA-D", BM_dl_scheme, &sada_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(da));
+  benchmark::RegisterBenchmark("SADA-D", BM_dl_scheme, &sada_da, rlcsa, patterns, kSize_rmq_sada + kSize_da);
 
   auto sada_gcda = drl::BuildDLSadakane<sdsl::bit_vector>(rmq_sada, get_doc_gcda, kNDocs + 1);
-  benchmark::RegisterBenchmark("SADA-C", BM_dl_scheme, &sada_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_sada) + sdsl::size_in_bytes(slp));
+  benchmark::RegisterBenchmark("SADA-C", BM_dl_scheme, &sada_gcda, rlcsa, patterns, kSize_rmq_sada + kSize_slp);
 
 
-//  benchmark::RegisterBenchmark("ILCP-L", BM_query_doc_list, std::make_shared<DoclistILCP>(*rlcsa, FLAGS_data), rlcsa,
-//                               ranges);
 
-//  benchmark::RegisterBenchmark("ILCP-D", BM_query_doc_list, std::make_shared<DoclistILCP>(*rlcsa, FLAGS_data, true),
-//                               rlcsa, patterns);
+  //******
+  // ILCP
+  //******
 
   drl::DefaultRMQ rmq_ilcp;
   std::shared_ptr<CSA::DeltaVector> run_heads_ilcp;
@@ -557,55 +463,23 @@ int main(int argc, char *argv[]) {
 
     run_heads_ilcp.reset(new CSA::DeltaVector(input));
   }
+  const auto kSize_rmq_ilcp = sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize();
 
-  auto ilcp = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc, kNDocs + 1, get_doc);
-  benchmark::RegisterBenchmark("ILCP-L", BM_dl_scheme, &ilcp, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize());
+  auto ilcp = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_rlcsa, kNDocs + 1, get_doc_rlcsa);
+  benchmark::RegisterBenchmark("ILCP-L", BM_dl_scheme, &ilcp, rlcsa, patterns, kSize_rmq_ilcp);
 
   auto ilcp_da = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_da, kNDocs + 1, get_doc_da);
-  benchmark::RegisterBenchmark("ILCP-D", BM_dl_scheme, &ilcp_da, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(da));
+  benchmark::RegisterBenchmark("ILCP-D", BM_dl_scheme, &ilcp_da, rlcsa, patterns, kSize_rmq_ilcp + kSize_da);
 
   auto ilcp_gcda = drl::BuildDLILCP<sdsl::bit_vector>(rmq_ilcp, run_heads_ilcp, get_doc_gcda, kNDocs + 1, get_doc_gcda);
-  benchmark::RegisterBenchmark("ILCP-C", BM_dl_scheme, &ilcp_gcda, rlcsa, patterns, sdsl::size_in_bytes(rmq_ilcp) + run_heads_ilcp->reportSize() + sdsl::size_in_bytes(slp));
-
-
-  benchmark::RegisterBenchmark("PDL-BC", BM_query_doc_list_without_buffer,
-                               std::make_shared<CSA::DocArray>(*rlcsa, FLAGS_data), rlcsa, patterns);
-
-  benchmark::RegisterBenchmark("PDL-RP", BM_query_doc_list_with_query,
-                               std::make_shared<PDLRP>(*rlcsa, FLAGS_data, false), rlcsa, patterns);
-
-//  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-//  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-//  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-//  MergeSetsBinTreeFunctor merge;
-//
-//  std::shared_ptr<PDLTree> pdl_tree;
-//  std::shared_ptr<CSA::ReadBuffer> pdl_grammar;
-//  std::shared_ptr<CSA::MultiArray> pdl_blocks;
-//  {
-//    std::ifstream input(FLAGS_data + ".pdlrp", std::ios::binary);
-//
-//    pdl_tree.reset(new PDLTree(*rlcsa, input));
-//
-//    pair_type temp;
-//    input.read((char*)&temp, sizeof(temp)); // Items, bits.
-//    pdl_grammar.reset(new CSA::ReadBuffer(input, temp.first, temp.second));
-//    pdl_blocks.reset(CSA::MultiArray::readFrom(input));
-//  }
-//  auto compute_cover_st = drl::BuildComputeCoverSuffixTreeFunctor(*pdl_tree);
-//  auto get_docs_st = drl::BuildGetDocsSuffixTree(*pdl_tree, *pdl_blocks, *pdl_grammar);
-//
-//  auto dl_pdl_rp = drl::BuildDLSampledTreeScheme(compute_cover_st, get_doc, get_docs_st, merge);
-//  benchmark::RegisterBenchmark("DL-PDL-RP", BM_dl_scheme, &dl_pdl_rp, rlcsa, patterns, 0);
+  benchmark::RegisterBenchmark("ILCP-C", BM_dl_scheme, &ilcp_gcda, rlcsa, patterns, kSize_rmq_ilcp + kSize_slp);
 
 
 
-//  benchmark::RegisterBenchmark("PDL-set", BM_query_doc_list_with_query,
-//                               std::make_shared<PDLRP>(*rlcsa, FLAGS_data, false, true),
-//                               ranges);
+  //********************************
+  // Grammar index (Claude & Munro)
+  //********************************
 
-
-  /// Grammar index (Claude & Munro)
   vector<pair<uint *, uint>> queries;
   for (const auto &buf : patterns) {
     if (buf.length() > 0) {
@@ -623,56 +497,9 @@ int main(int argc, char *argv[]) {
 
 
 
-//  std::vector<CSA::pair_type> ranges1(patterns.size());
-//  auto file_1_sep = coll_path / "data.1";
-//
-//  std::string id = sdsl::util::basename(file_1_sep.string()) + "_";
-//  sdsl::cache_config cconfig_sep_1{false, coll_name.string(), id};
-//  drl::CSAWrapper<sdsl::csa_bitcompressed<>> csa(file_1_sep.string(), (uint8_t) 1, cconfig_sep_1);
-//
-//  for (CSA::usint i = 0; i < patterns.size(); i++) {
-//    const auto &sa = csa.GetSA();
-//    if (0 < backward_search(sa, 0, sa.size() - 1, patterns[i].begin(), patterns[i].end(), ranges1[i].first, ranges1[i].second))
-//      ++ranges1[i].second;
-//  }
-
-//  std::cout << "|RLCSAWrapper| = " << rlcsa_wrapper.size() << std::endl;
-
-
-
-
-
-  // New algorithm's tests
-  drl::ComputeSpanCoverFromBottomFunctor compute_span_cover_from_bottom;
-  drl::SAGetDocs sa_docs;
-  drl::SLPGetSpan slp_docs;
-  drl::LSLPGetSpan lslp_docs;
-
-  auto bit_compress = [](sdsl::int_vector<> &_v) { sdsl::util::bit_compress(_v); };
-
-//  grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>> slp_bc;
-//  if (!Load(slp_bc, "slp", cconfig_sep_0)) {
-//    std::cout << "Construct SLP<BC>" << std::endl;
-//
-//    slp_bc = decltype(slp_bc)(slp, bit_compress, bit_compress);
-//
-//    Save(slp_bc, "slp", cconfig_sep_0);
-//  }
-//
-//  grammar::SampledPTS<grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>>> spts_slp_bc;
-//  if (Load(spts_slp_bc, "pts", cconfig_sep_0)) {
-//    spts_slp_bc.SetSLP(&slp_bc);
-//  } else {
-//    std::cout << "Construct SPTS" << std::endl;
-//
-//    spts_slp_bc.Compute(&slp_bc);
-//
-//    Save(spts_slp_bc, "pts", cconfig_sep_0);
-//  }
-//
-//  // BM
-//  auto pdlgt_slp_bc_spts = drl::BuildPDLGT(rlcsa_wrapper, slp_bc, spts_slp_bc, compute_span_cover_from_top, sa_docs);
-//  benchmark::RegisterBenchmark("PDLGT_slp<bc>_spts", BM_pdloda_rl, &pdlgt_slp_bc_spts, ranges);
+  //*****************
+  // SLPs and Chunks
+  //*****************
 
   auto prefix = std::to_string(FLAGS_bs) + "-" + std::to_string(FLAGS_sf);
   auto slp_filename_prefix = prefix + "-slp";
@@ -690,7 +517,6 @@ int main(int argc, char *argv[]) {
       return 1000 <= _lchildren.size() + _rchildren.size();
     };
 
-
     grammar::AddSet<decltype(cslp_chunks)> add_set(cslp_chunks);
 //    cslp.Compute(256, add_set, add_set, grammar::MustBeSampled<decltype(cslp_chunks)>(cslp_chunks, 16/*, rlcsa->getNumberOfSequences()*/));
     cslp.Compute(FLAGS_bs, add_set, add_set, grammar::MustBeSampled<decltype(cslp_chunks)>(
@@ -701,27 +527,118 @@ int main(int argc, char *argv[]) {
     Save(cslp, slp_filename_prefix, cconfig_sep_0);
     Save(cslp_chunks, pts_filename_prefix, cconfig_sep_0);
   }
+  const auto kSize_cslp = sdsl::size_in_bytes(cslp);
+
+  auto bit_compress = [](sdsl::int_vector<> &_v) { sdsl::util::bit_compress(_v); };
+  grammar::RePairEncoder<false> encoder_nslp;
+  grammar::LightSLP<> lslp;
+  if (!Load(lslp, slp_filename_prefix, cconfig_sep_0)) {
+    std::cout << "Construct LSLP" << std::endl;
+
+    lslp.Compute(da.begin(), da.end(), encoder_nslp, cslp);
+
+    Save(lslp, slp_filename_prefix, cconfig_sep_0);
+  }
+  const auto kSize_lslp = sdsl::size_in_bytes(lslp);
+
+  drl::ExpandSLPFunctor<decltype(lslp)> lslp_get_docs{lslp};
+
+  grammar::LightSLP<grammar::BasicSLP<sdsl::int_vector<>>,
+                    grammar::SampledSLP<>,
+                    grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>>> lslp_bslp;
+  if (!Load(lslp_bslp, slp_filename_prefix, cconfig_sep_0)) {
+    std::cout << "Construct LBSLP" << std::endl;
+
+    lslp_bslp = decltype(lslp_bslp)(lslp, bit_compress, bit_compress, bit_compress, bit_compress);
+
+    Save(lslp_bslp, slp_filename_prefix, cconfig_sep_0);
+  }
+  const auto kSize_lslp_bslp = sdsl::size_in_bytes(lslp_bslp);
+
+  drl::ExpandSLPFunctor<decltype(lslp_bslp)> lslp_bslp_get_docs{lslp_bslp};
+
+
+
+  //*****
+  // PDL
+  //*****
+
+  MergeSetsLinearFunctor merge_linear;
+
+  std::shared_ptr<PDLTree> pdl_tree_bc;
+  std::shared_ptr<drl::PDLBC<PDLTree>> get_docs_pdl_bc;
+  {
+    std::ifstream input(FLAGS_data + ".rlcsa.docs", std::ios::binary);
+
+    usint flags = 0;
+    input.read((char *) (&flags), sizeof(flags));
+
+    pdl_tree_bc.reset(new PDLTree(*rlcsa, input));
+
+    get_docs_pdl_bc = std::make_shared<drl::PDLBC<PDLTree>>(*pdl_tree_bc, input, flags);
+  }
+  const auto kSize_pdl_tree_bc = pdl_tree_bc->reportSize();
+  const auto kSize_pdl_bc = kSize_pdl_tree_bc + get_docs_pdl_bc->reportSize();
+
+  auto compute_cover_st_bc = drl::BuildComputeCoverSuffixTreeFunctor(*pdl_tree_bc);
+
+  //BM
+  benchmark::RegisterBenchmark("PDL-BC", BM_query_doc_list_without_buffer,
+                               std::make_shared<CSA::DocArray>(*rlcsa, FLAGS_data), rlcsa, patterns);
+
+  auto dl_pdl_bc_l = drl::BuildDLSampledTreeScheme(compute_cover_st_bc, get_doc_rlcsa, *get_docs_pdl_bc, merge_linear);
+  benchmark::RegisterBenchmark("PDL-BC-L", BM_dl_scheme, &dl_pdl_bc_l, rlcsa, patterns, kSize_pdl_bc);
+
+  auto dl_pdl_bc_c =
+      drl::BuildDLSampledTreeScheme(compute_cover_st_bc, lslp_bslp_get_docs, *get_docs_pdl_bc, merge_linear);
+  benchmark::RegisterBenchmark("PDL-BC-C", BM_dl_scheme, &dl_pdl_bc_c, rlcsa, patterns, kSize_pdl_bc + kSize_lslp_bslp);
+
+  std::shared_ptr<PDLTree> pdl_tree_rp;
+  std::shared_ptr<CSA::ReadBuffer> pdl_grammar_rp;
+  std::shared_ptr<CSA::MultiArray> pdl_blocks_rp;
+  {
+    std::ifstream input(FLAGS_data + ".pdlrp", std::ios::binary);
+
+    pdl_tree_rp.reset(new PDLTree(*rlcsa, input));
+
+    pair_type temp;
+    input.read((char *) &temp, sizeof(temp)); // Items, bits.
+    pdl_grammar_rp.reset(new CSA::ReadBuffer(input, temp.first, temp.second));
+    pdl_blocks_rp.reset(CSA::MultiArray::readFrom(input));
+  }
+  const auto kSize_pdl_tree = pdl_tree_rp->reportSize();
+  const auto kSize_pdl_rp = kSize_pdl_tree + pdl_grammar_rp->reportSize() + pdl_blocks_rp->reportSize();
+
+  auto compute_cover_st_rp = drl::BuildComputeCoverSuffixTreeFunctor(*pdl_tree_rp);
+  auto get_docs_pdl_rp = drl::BuildGetDocsSuffixTreeRP(*pdl_tree_rp, *pdl_blocks_rp, *pdl_grammar_rp);
+
+  //BM
+  benchmark::RegisterBenchmark("PDL-RP", BM_query_doc_list_with_query,
+                               std::make_shared<PDLRP>(*rlcsa, FLAGS_data, false), rlcsa, patterns);
+
+  auto dl_pdl_rp_l = drl::BuildDLSampledTreeScheme(compute_cover_st_rp, get_doc_rlcsa, get_docs_pdl_rp, merge_linear);
+  benchmark::RegisterBenchmark("PDL-RP-L", BM_dl_scheme, &dl_pdl_rp_l, rlcsa, patterns, kSize_pdl_rp);
+
+  auto dl_pdl_rp_c =
+      drl::BuildDLSampledTreeScheme(compute_cover_st_rp, lslp_bslp_get_docs, get_docs_pdl_rp, merge_linear);
+  benchmark::RegisterBenchmark("PDL-RP-C", BM_dl_scheme, &dl_pdl_rp_c, rlcsa, patterns, kSize_pdl_rp + kSize_lslp_bslp);
+
+
+
+  //*****
+  //GCDA
+  //*****
+
+  // New algorithm's tests
+  drl::ComputeSpanCoverFromBottomFunctor compute_span_cover_from_bottom;
+  drl::SAGetDocs sa_docs;
+  drl::SLPGetSpan slp_docs;
+  drl::LSLPGetSpan lslp_docs;
 
   // BM
 //  auto pdlgt_cslp_chunks = drl::BuildPDLGT(rlcsa_wrapper, cslp, cslp_chunks, compute_span_cover_from_bottom, slp_docs);
 //  benchmark::RegisterBenchmark("PDLGT_cslp_chunks", BM_pdloda_rl, &pdlgt_cslp_chunks, ranges);
 
-
-//  grammar::SampledSLP<> sslp;
-////  grammar::Chunks<> sslp_chunks;
-//  if (!Load(sslp, slp_filename_prefix, cconfig_sep_0)/* || !Load(sslp_chunks, pts_filename_prefix, cconfig_sep_0)*/) {
-////    std::cout << "Construct SSLP && SSLPChunks" << std::endl;
-//    std::cout << "Construct SSLP" << std::endl;
-//
-//    sslp = cslp;
-////    grammar::AddSet<decltype(sslp_chunks)> add_set(sslp_chunks);
-////    sslp.Compute(slp, 256, add_set, add_set, grammar::MustBeSampled<decltype(sslp_chunks)>(sslp_chunks, 16));
-//
-//    Save(sslp, slp_filename_prefix, cconfig_sep_0);
-////    Save(sslp_chunks, pts_filename_prefix, cconfig_sep_0);
-//  }
-//
-//  // BM
 //  auto pdlgt_sslp_chunks = drl::BuildPDLGT(rlcsa_wrapper, sslp, cslp_chunks, compute_span_cover_from_bottom, sa_docs);
 //  benchmark::RegisterBenchmark("PDLGT_sslp_chunks", BM_pdloda_rl, &pdlgt_sslp_chunks, ranges);
 
@@ -735,17 +652,12 @@ int main(int argc, char *argv[]) {
     Save(sslp_chunks_bc, pts_filename_prefix, cconfig_sep_0);
   }
 
-  // // BM
-  // auto pdlgt_sslp_chunks_bc =
-  //     drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_chunks_bc, compute_span_cover_from_bottom, sa_docs);
-  // benchmark::RegisterBenchmark("PDLGT_sslp_chunks<bc>", BM_pdloda_rl, &pdlgt_sslp_chunks_bc, ranges);
-
   // BM
 //  auto pdlgt_cslp_chunks_bc =
 //      drl::BuildPDLGT(rlcsa_wrapper, cslp, sslp_chunks_bc, compute_span_cover_from_bottom, slp_docs);
 //  benchmark::RegisterBenchmark("PDLGT_cslp_chunks<bc>", BM_pdloda_rl, &pdlgt_cslp_chunks_bc, ranges);
 
-  grammar::RePairEncoder<false> encoder_nslp;
+
   grammar::GCChunks<grammar::SLP<>> sslp_gcchunks;
   if (!Load(sslp_gcchunks, pts_filename_prefix, cconfig_sep_0)) {
     std::cout << "Construct GCChunks" << std::endl;
@@ -755,6 +667,7 @@ int main(int argc, char *argv[]) {
 
     Save(sslp_gcchunks, pts_filename_prefix, cconfig_sep_0);
   }
+  const auto kSize_sslp_gcchunks = sdsl::size_in_bytes(sslp_gcchunks);
 
 //  // BM
 //  auto pdlgt_sslp_gcchunks =
@@ -766,16 +679,17 @@ int main(int argc, char *argv[]) {
       drl::BuildPDLGT(rlcsa_wrapper, cslp, sslp_gcchunks, compute_span_cover_from_bottom, slp_docs);
   benchmark::RegisterBenchmark("PDLGT_cslp_gcchunks", BM_pdloda_rl, &pdlgt_cslp_gcchunks, rlcsa, patterns);
 
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   auto compute_cover = drl::BuildComputeCoverBottomFunctor(cslp);
   MergeSetsBinTreeFunctor merge;
   drl::ExpandSLPCoverFunctor<grammar::CombinedSLP<>> slp_get_docs{cslp};
 
   auto dl_cslp = drl::BuildDLSampledTreeScheme(compute_cover, slp_get_docs, sslp_gcchunks, merge);
-  benchmark::RegisterBenchmark("GCDA-C-PDLGT_cslp_gcchunks", BM_dl_scheme, &dl_cslp, rlcsa, patterns, 0);
-
+  benchmark::RegisterBenchmark("GCDA_cslp_gcchunks",
+                               BM_dl_scheme,
+                               &dl_cslp,
+                               rlcsa,
+                               patterns,
+                               kSize_cslp + kSize_sslp_gcchunks);
 
   grammar::GCChunks<
       grammar::SLP<sdsl::int_vector<>, sdsl::int_vector<>>,
@@ -789,32 +703,21 @@ int main(int argc, char *argv[]) {
 
     Save(sslp_gcchunks_bc, pts_filename_prefix, cconfig_sep_0);
   }
+  const auto kSize_sslp_gcchunks_bc = sdsl::size_in_bytes(sslp_gcchunks_bc);
 
-
-//  // BM
-//  auto pdlgt_sslp_gcchunks_bc =
-//      drl::BuildPDLGT(rlcsa_wrapper, sslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, sa_docs);
-//  benchmark::RegisterBenchmark("PDLGT_sslp_gcchunks<bc>", BM_pdloda_rl, &pdlgt_sslp_gcchunks_bc, ranges);
 
   // BM
   auto pdlgt_cslp_gcchunks_bc =
       drl::BuildPDLGT(rlcsa_wrapper, cslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, slp_docs);
   benchmark::RegisterBenchmark("PDLGT_cslp_gcchunks<bc>", BM_pdloda_rl, &pdlgt_cslp_gcchunks_bc, rlcsa, patterns);
 
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   auto dl_cslp_bc = drl::BuildDLSampledTreeScheme(compute_cover, slp_get_docs, sslp_gcchunks_bc, merge);
-  benchmark::RegisterBenchmark("GCDA-C-PDLGT_cslp_gcchunks<bc>", BM_dl_scheme, &dl_cslp_bc, rlcsa, patterns, 0);
-
-  grammar::LightSLP<> lslp;
-  if (!Load(lslp, slp_filename_prefix, cconfig_sep_0)) {
-    std::cout << "Construct LSLP" << std::endl;
-
-    lslp.Compute(da.begin(), da.end(), encoder_nslp, cslp);
-
-    Save(lslp, slp_filename_prefix, cconfig_sep_0);
-  }
+  benchmark::RegisterBenchmark("GCDA_cslp_gcchunks<bc>",
+                               BM_dl_scheme,
+                               &dl_cslp_bc,
+                               rlcsa,
+                               patterns,
+                               kSize_cslp + kSize_sslp_gcchunks_bc);
 
 
   // BM
@@ -822,49 +725,32 @@ int main(int argc, char *argv[]) {
       drl::BuildPDLGT(rlcsa_wrapper, lslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, lslp_docs);
   benchmark::RegisterBenchmark("PDLGT_lslp_gcchunks<bc>", BM_pdloda_rl, &pdlgt_lslp_gcchunks_bc, rlcsa, patterns);
 
-
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-//  auto compute_cover = drl::BuildComputeCoverBottomFunctor(cslp);
-//  MergeSetsBinTreeFunctor merge;
-  drl::ExpandSLPFunctor<decltype(lslp)> lslp_get_docs{lslp};
   auto dl_lslp = drl::BuildDLSampledTreeScheme(compute_cover, lslp_get_docs, sslp_gcchunks_bc, merge);
-  benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp_gcchunks<bc>", BM_dl_scheme, &dl_lslp, rlcsa, patterns, 0);
+  benchmark::RegisterBenchmark("GCDA_lslp_gcchunks<bc>",
+                               BM_dl_scheme,
+                               &dl_lslp,
+                               rlcsa,
+                               patterns,
+                               kSize_lslp + kSize_sslp_gcchunks_bc);
 
-
-  grammar::LightSLP<grammar::BasicSLP<sdsl::int_vector<>>,
-                    grammar::SampledSLP<>,
-                    grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>>> lslp_bslp;
-  if (!Load(lslp_bslp, slp_filename_prefix, cconfig_sep_0)) {
-    std::cout << "Construct LBSLP" << std::endl;
-
-    lslp_bslp = decltype(lslp_bslp)(lslp, bit_compress, bit_compress, bit_compress, bit_compress);
-
-    Save(lslp_bslp, slp_filename_prefix, cconfig_sep_0);
-  }
-
-  // BM
-//  auto pdlgt_lslp_bslp_chunks =
-//      drl::BuildPDLGT(rlcsa_wrapper, lslp_bslp, cslp_chunks, compute_span_cover_from_bottom, lslp_docs);
-//  benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_chunks", BM_pdloda_rl, &pdlgt_lslp_bslp_chunks, ranges);
-
-  // BM
-//  auto pdlgt_lslp_bslp_chunks_bc =
-//      drl::BuildPDLGT(rlcsa_wrapper, lslp_bslp, sslp_chunks_bc, compute_span_cover_from_bottom, lslp_docs);
-//  benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_chunks<bc>", BM_pdloda_rl, &pdlgt_lslp_bslp_chunks_bc, ranges);
 
   // BM
   auto pdlgt_lslp_bslp_gcchunks_bc =
       drl::BuildPDLGT(rlcsa_wrapper, lslp_bslp, sslp_gcchunks_bc, compute_span_cover_from_bottom, lslp_docs);
-  benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_gcchunks<bc>", BM_pdloda_rl, &pdlgt_lslp_bslp_gcchunks_bc, rlcsa, patterns);
+  benchmark::RegisterBenchmark("PDLGT_lslp<bslp>_gcchunks<bc>",
+                               BM_pdloda_rl,
+                               &pdlgt_lslp_bslp_gcchunks_bc,
+                               rlcsa,
+                               patterns);
 
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  drl::ExpandSLPFunctor<decltype(lslp_bslp)> lslp_bslp_get_docs{lslp_bslp};
   auto dl_lslp_bslp = drl::BuildDLSampledTreeScheme(compute_cover, lslp_bslp_get_docs, sslp_gcchunks_bc, merge);
-  benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp<bslp>_gcchunks<bc>", BM_dl_scheme, &dl_lslp_bslp, rlcsa, patterns, 0);
+  benchmark::RegisterBenchmark("GCDA_lslp<bslp>_gcchunks<bc>",
+                               BM_dl_scheme,
+                               &dl_lslp_bslp,
+                               rlcsa,
+                               patterns,
+                               kSize_lslp_bslp + kSize_sslp_gcchunks_bc);
+
 
   grammar::GCChunks<
       grammar::BasicSLP<sdsl::int_vector<>>,
@@ -878,6 +764,7 @@ int main(int argc, char *argv[]) {
 
     Save(sslp_gcchunks_bslp_bc, pts_filename_prefix, cconfig_sep_0);
   }
+  const auto kSize_sslp_gcchunks_bslp_bc = sdsl::size_in_bytes(sslp_gcchunks_bslp_bc);
 
   // BM
   auto pdlgt_lslp_bslp_gcchunks_bslp_bc =
@@ -888,33 +775,14 @@ int main(int argc, char *argv[]) {
                                rlcsa,
                                patterns);
 
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  //XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  auto dl_lslp_bslp_bslp = drl::BuildDLSampledTreeScheme(compute_cover, lslp_bslp_get_docs, sslp_gcchunks_bslp_bc, merge);
-  benchmark::RegisterBenchmark("GCDA-C-PDLGT_lslp<bslp>_gcchunks<bslp,bc> PDL1", BM_dl_scheme, &dl_lslp_bslp_bslp, rlcsa, patterns, 0);
-
-  std::shared_ptr<PDLTree> pdl_tree;
-  std::shared_ptr<CSA::ReadBuffer> pdl_grammar;
-  std::shared_ptr<CSA::MultiArray> pdl_blocks;
-  {
-    std::ifstream input(FLAGS_data + ".pdlrp", std::ios::binary);
-
-    pdl_tree.reset(new PDLTree(*rlcsa, input));
-
-    pair_type temp;
-    input.read((char*)&temp, sizeof(temp)); // Items, bits.
-    pdl_grammar.reset(new CSA::ReadBuffer(input, temp.first, temp.second));
-    pdl_blocks.reset(CSA::MultiArray::readFrom(input));
-  }
-  auto compute_cover_st = drl::BuildComputeCoverSuffixTreeFunctor(*pdl_tree);
-  auto get_docs_st = drl::BuildGetDocsSuffixTree(*pdl_tree, *pdl_blocks, *pdl_grammar);
-
-  //TODO check the error: using lslp_bslp_get_docs get less elements
-  MergeSetsTmpFunctor merge_tmp;
-  auto dl_pdl_rp = drl::BuildDLSampledTreeScheme(compute_cover_st, lslp_bslp_get_docs, get_docs_st, merge_tmp);
-  benchmark::RegisterBenchmark("DL-PDL-RP", BM_dl_scheme, &dl_pdl_rp, rlcsa, patterns, sdsl::size_in_bytes(lslp_bslp));
-
+  auto dl_lslp_bslp_bslp =
+      drl::BuildDLSampledTreeScheme(compute_cover, lslp_bslp_get_docs, sslp_gcchunks_bslp_bc, merge);
+  benchmark::RegisterBenchmark("GCDA_lslp<bslp>_gcchunks<bslp,bc>",
+                               BM_dl_scheme,
+                               &dl_lslp_bslp_bslp,
+                               rlcsa,
+                               patterns,
+                               kSize_lslp_bslp + kSize_sslp_gcchunks_bslp_bc);
 
   benchmark::Initialize(&argc, argv);
   benchmark::RunSpecifiedBenchmarks();
