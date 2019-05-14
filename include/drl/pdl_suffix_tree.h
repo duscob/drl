@@ -114,11 +114,11 @@ auto BuildComputeCoverSuffixTreeFunctor(const _Tree &_tree) {
 
 
 template<typename _Tree, typename _Blocks, typename _Grammar>
-class GetDocsSuffixTree {
+class GetDocsSuffixTreeRP {
  public:
-  GetDocsSuffixTree(const _Tree &_tree, const _Blocks &_blocks, const _Grammar &_grammar) : tree_{_tree},
-                                                                                            blocks_{_blocks},
-                                                                                            grammar_{_grammar} {}
+  GetDocsSuffixTreeRP(const _Tree &_tree, const _Blocks &_blocks, const _Grammar &_grammar) : tree_{_tree},
+                                                                                              blocks_{_blocks},
+                                                                                              grammar_{_grammar} {}
 
   auto operator[](std::size_t _i) const {
     std::vector<uint32_t> set;
@@ -167,8 +167,7 @@ class GetDocsSuffixTree {
 //    iter = 0;
   }
 
-
-   template<typename _Report>
+  template<typename _Report>
   void addBlocks1(usint first_block, usint number_of_blocks, _Report &_report) const {
     CSA::MultiArray::Iterator *iter = blocks_.getIterator();
     iter->goToItem(first_block, 0);
@@ -216,9 +215,136 @@ class GetDocsSuffixTree {
 
 
 template<typename _Tree, typename _Blocks, typename _Grammar>
-auto BuildGetDocsSuffixTree(const _Tree &_tree, const _Blocks &_blocks, const _Grammar &_grammar) {
-  return GetDocsSuffixTree<_Tree, _Blocks, _Grammar>(_tree, _blocks, _grammar);
+auto BuildGetDocsSuffixTreeRP(const _Tree &_tree, const _Blocks &_blocks, const _Grammar &_grammar) {
+  return GetDocsSuffixTreeRP<_Tree, _Blocks, _Grammar>(_tree, _blocks, _grammar);
 }
+
+
+template<typename _Tree>
+class PDLBC {
+ public:
+  PDLBC(const _Tree &_tree, std::ifstream &_in, usint _flags) : tree_{_tree}, uses_rle{false} {
+    if (_flags & RLE_FLAG) {
+      uses_rle = true;
+    }
+
+    rule_borders = std::make_shared<CSA::SuccinctVector>(_in);
+    rules = std::make_shared<CSA::ReadBuffer>(_in, rule_borders->getSize(), CSA::length(getNumberOfDocuments()));
+    block_borders = std::make_shared<CSA::SuccinctVector>(_in);
+    blocks = std::make_shared<CSA::ReadBuffer>(_in, block_borders->getSize(), CSA::length(maxInteger()));
+    has_grammar = true;
+  }
+
+  template<class _Report>
+  void addBlocks(usint first, usint number, _Report &_report) const {
+    if (first >= this->getNumberOfNodes() || number == 0) { return; }
+
+    CSA::SuccinctVector::Iterator iter(*(this->block_borders));
+    usint from = iter.select(first);
+    usint to = (number == 1 ? iter.selectNext() : iter.select(first + number));
+
+    for (usint i = from; i < to; i++) {
+      usint val = this->blocks->readItemConst(i);
+      if (val >= this->maxInteger()) {
+        addRun(0, getNumberOfDocuments(), _report);
+        return;
+      }  // Block contains all documents.
+      if (val < this->getNumberOfDocuments()) // Value is a document id.
+      {
+        this->addItem(val, _report);
+      } else  // Value is a rule id.
+      {
+        val -= this->getNumberOfDocuments();
+        CSA::SuccinctVector::Iterator rule_iter(*(this->rule_borders));
+        usint rfrom = rule_iter.select(val);
+        usint rto = rule_iter.selectNext();
+
+        if (this->usesRLE()) {
+          usint run_start = 0;
+          bool want_run_length = false;
+          for (usint j = rfrom; j < rto; j++) {
+            val = this->rules->readItemConst(j);
+            if (val >= this->getNumberOfDocuments()) {
+              addRun(0, getNumberOfDocuments(), _report);
+              return;
+            }  // Rule covers all documents.
+            else if (want_run_length) {
+              this->addRun(run_start, val, _report);
+              want_run_length = false;
+            } else {
+              run_start = val;
+              want_run_length = true;
+            }
+          }
+        } else {
+          for (usint j = rfrom; j < rto; j++) {
+            val = this->rules->readItemConst(j);
+            if (val >= this->getNumberOfDocuments()) {
+              addRun(0, getNumberOfDocuments(), _report);
+              return;
+            }  // Rule covers all documents.
+            else { this->addItem(val, _report); }
+          }
+        }
+      }
+    }
+  }
+
+  usint reportSize() const {
+    usint bytes = sizeof(*this);
+
+    usint rule_bytes = 0, block_bytes = 0;
+    if (this->hasGrammar()) {
+      rule_bytes = this->rule_borders->reportSize() + this->rules->reportSize();
+      block_bytes = this->block_borders->reportSize() + this->blocks->reportSize();
+    }
+
+    bytes += rule_bytes + block_bytes;
+
+    return bytes;
+  }
+
+ private:
+  const _Tree &tree_;
+
+  std::shared_ptr<CSA::SuccinctVector> rule_borders;
+  std::shared_ptr<CSA::ReadBuffer> rules;        // this->getNumberOfDocs() means all documents.
+
+  std::shared_ptr<CSA::SuccinctVector> block_borders;
+  std::shared_ptr<CSA::ReadBuffer> blocks;       // Value this->maxInteger() means all documents.
+
+  bool ok, has_grammar, uses_rle;
+
+  const static usint RLE_FLAG = 0x01;
+
+  inline bool isOk() const { return this->ok; }
+
+  inline bool hasGrammar() const { return this->has_grammar; }
+
+  inline bool usesRLE() const { return this->uses_rle; }
+
+  inline usint getNumberOfNodes() const { return this->getNumberOfLeaves() + this->getNumberOfInternalNodes(); }
+
+  inline usint getNumberOfLeaves() const { return tree_.getNumberOfLeaves(); }
+
+  inline usint getNumberOfInternalNodes() const { return tree_.getNumberOfInternalNodes(); }
+
+  inline usint maxInteger() const { return getNumberOfDocuments() + getNumberOfRules(); }
+
+  inline usint getNumberOfDocuments() const { return tree_.getNumberOfDocuments(); }
+
+  inline usint getNumberOfRules() const { return rule_borders->getNumberOfItems(); }
+
+  template<typename _Report>
+  inline void addRun(usint from, usint length, _Report &_report) const {
+    for (usint i = from; i < from + length; i++) { _report(i); }
+  }
+
+  template<typename _Report>
+  inline void addItem(usint item, _Report &_report) const {
+    _report(item);
+  }
+};
 
 }
 
