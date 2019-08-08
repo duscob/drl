@@ -56,12 +56,13 @@ set(SOURCE_FILES include/drl/doclist.h
         include/drl/pdl_suffix_tree.h)
 
 find_library(RLCSA_LIB rlcsa)
+find_package(OpenMP REQUIRED)
 find_library(SDSL_LIB sdsl)
 find_library(CDS_LIB cds)
 find_library(GRAMMAR_LIB grammar)
 find_library(DIVSUFSORT_LIB divsufsort)
 find_library(DIVSUFSORT64_LIB divsufsort64)
-set(LIBS ${RLCSA_LIB} gomp ${SDSL_LIB} ${CDS_LIB} ${GRAMMAR_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
+set(LIBS ${RLCSA_LIB} ${OpenMP_CXX_LIBRARIES} ${SDSL_LIB} ${CDS_LIB} ${GRAMMAR_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
 
 add_library(drl ${SOURCE_FILES})
 target_link_libraries(drl ${LIBS})
@@ -84,11 +85,11 @@ endif ()
 
 
 if (drl_build_tools)
-    cxx_executable_with_flags(build_docs_list "" "${GFLAGS_LIB};${RLCSA_LIB};gomp" tool/build_docs_list.cpp)
+    cxx_executable_with_flags(build_docs_list "" "${GFLAGS_LIB};${RLCSA_LIB};${OpenMP_CXX_LIBRARIES}" tool/build_docs_list.cpp)
 
     find_package(Boost COMPONENTS filesystem system REQUIRED)
 
-    cxx_executable_with_flags(expand_doc_array "" "${GFLAGS_LIB};${RLCSA_LIB};drl;${Boost_LIBRARIES}" tool/expand_doc_array.cpp)
+    cxx_executable_with_flags(expand_doc_array "" "${GFLAGS_LIB};${RLCSA_LIB};${OpenMP_CXX_LIBRARIES};drl;${Boost_LIBRARIES}" tool/expand_doc_array.cpp)
 endif ()
 
 
