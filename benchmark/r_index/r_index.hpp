@@ -30,7 +30,7 @@ public:
 
 	using triple = std::tuple<range_t, ulint, ulint>;
 
-	r_index(){}
+	r_index() = default;
 
 	/*
 	 * Build index
@@ -377,9 +377,9 @@ public:
 	/* serialize the structure to the ostream
 	 * \param out	 the ostream
 	 */
-	ulint serialize(std::ostream& out, sdsl::structure_tree_node *v = nullptr, std::string name = "") const {
+	size_type serialize(std::ostream& out, sdsl::structure_tree_node *v = nullptr, const std::string &name = "") const {
 
-		ulint w_bytes = 0;
+		size_type w_bytes = 0;
 
 		assert(F.size()>0);
 		assert(bwt.size()>0);
@@ -423,7 +423,7 @@ public:
 	 * save the structure to the path specified.
 	 * \param path_prefix prefix of the index files. suffix ".ri" will be automatically added
 	 */
-	void save_to_file(string path_prefix){
+	void save_to_file(const string &path_prefix){
 
 		string path = string(path_prefix).append(".ri");
 
@@ -437,7 +437,7 @@ public:
 	 * load the structure from the path specified.
 	 * \param path: full file name
 	 */
-	void load_from_file(string path){
+	void load_from_file(const string &path){
 
 		std::ifstream in(path);
 		load(in);

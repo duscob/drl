@@ -169,17 +169,14 @@ auto BuildDLSadakane(const _RMQ &_rmq, const _GetDoc &_get_doc, std::size_t _nd)
 template<typename _GetDoc, typename _Reported, typename _GetDocs>
 class DLBasicILCP {
  public:
-  DLBasicILCP(const std::shared_ptr<CSA::DeltaVector> &_run_heads,
-              _GetDoc &_get_doc,
-              std::size_t _nd,
-              _GetDocs &_get_docs) : run_heads_{
-      _run_heads}, get_doc_{_get_doc}, reported_{_nd, 0}, get_docs_{_get_docs} {}
+  DLBasicILCP(std::shared_ptr<CSA::DeltaVector> _run_heads, _GetDoc &_get_doc, std::size_t _nd, _GetDocs &_get_docs)
+      : run_heads_{std::move(_run_heads)}, get_doc_{_get_doc}, reported_{_nd, 0}, get_docs_{_get_docs} {}
 
   /// Get document
   auto operator()(std::size_t _k) const {
     CSA::DeltaVector::Iterator iter(*run_heads_);
 
-    auto b = std::max(sp_, iter.select(_k));
+    auto b = std::max(sp_, static_cast<decltype(sp_)>(iter.select(_k)));
     return get_doc_(b);
   }
 
@@ -200,8 +197,8 @@ class DLBasicILCP {
 
     CSA::DeltaVector::Iterator iter(*run_heads_);
 
-    auto b = std::max(sp_, iter.select(_k)) + 1;
-    auto e = std::min(ep_, iter.selectNext());
+    auto b = std::max(sp_, static_cast<decltype(sp_)>(iter.select(_k))) + 1;
+    auto e = std::min(ep_, static_cast<decltype(ep_)>(iter.selectNext()));
     if (b >= e) return;
 
     get_docs_(b, e, report);
