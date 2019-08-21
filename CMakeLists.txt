@@ -53,7 +53,8 @@ set(SOURCE_FILES include/drl/doclist.h
         include/drl/dl_basic_scheme.h
         include/drl/dl_sampled_tree_scheme.h
         include/drl/helper.h
-        include/drl/pdl_suffix_tree.h)
+        include/drl/pdl_suffix_tree.h
+        include/drl/rle.h)
 
 find_library(RLCSA_LIB rlcsa)
 find_package(OpenMP REQUIRED)
@@ -81,6 +82,8 @@ if (drl_build_tests)
     cxx_test_with_flags_and_args(construct_da_test "" "gtest;gtest_main;${GFLAGS_LIB};drl;${LIBS}" "" test/construct_da_test.cpp)
 
     cxx_test_with_flags_and_args(pdloda_test "" "gtest;gtest_main;${GFLAGS_LIB};drl;${LIBS}" "" test/pdloda_test.cpp)
+
+    cxx_test_with_flags_and_args(rle_test "" "gtest;gtest_main;gmock;${GFLAGS_LIB};drl;${LIBS}" "" test/rle_test.cpp)
 endif ()
 
 
