@@ -53,3 +53,43 @@ INSTANTIATE_TEST_SUITE_P(RLE,
                                                                       11})
                          )
 );
+
+class RLEIteratorTF : public testing::TestWithParam<std::tuple<std::vector<int>, std::vector<int>>> {
+};
+
+TEST_P(RLEIteratorTF, PreIncrement) {
+  const auto &seq = std::get<0>(GetParam());
+  const auto &rle_seq = std::get<1>(GetParam());
+
+  drl::RLEIterator<decltype(seq.begin())> iter(seq.begin(), seq.end());
+  drl::RLEIterator<decltype(seq.begin())> eiter(seq.end(), seq.end());
+
+  EXPECT_THAT(rle_seq, ::testing::ElementsAreArray(iter, eiter));
+}
+
+TEST_P(RLEIteratorTF, PostIncrement) {
+  const auto &seq = std::get<0>(GetParam());
+  const auto &rle_seq = std::get<1>(GetParam());
+
+  drl::RLEIterator<decltype(seq.begin())> iter(seq.begin(), seq.end());
+  drl::RLEIterator<decltype(seq.begin())> eiter(seq.end(), seq.end());
+
+  ASSERT_EQ(distance(iter, eiter), rle_seq.size());
+  for (auto it1 = iter, it2 = iter; it1 != eiter; ++it1) {
+    EXPECT_EQ(it1, it2++);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(RLE,
+                         RLEIteratorTF,
+                         ::testing::Values(
+                             std::make_tuple(std::vector<int>{1, 2, 3, 4, 5},
+                                             std::vector<int>{1, 2, 3, 4, 5}),
+                             std::make_tuple(std::vector<int>{5, 5, 5, 5, 5},
+                                             std::vector<int>{5}),
+                             std::make_tuple(std::vector<int>{5, 5, 5, 5, 5, 3},
+                                             std::vector<int>{5, 3}),
+                             std::make_tuple(std::vector<int>{4, 3, 2, 1, 3, 2, 1, 3, 3, 3, 2, 1, 2, 2, 1, 1},
+                                             std::vector<int>{4, 3, 2, 1, 3, 2, 1, 3, 2, 1, 2, 1})
+                         )
+);

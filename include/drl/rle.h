@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <vector>
+#include <iterator>
 
 namespace drl {
 
@@ -56,6 +57,42 @@ class RLEncoding {
  protected:
   _BVRuns bv_runs_;
   _BVRunsRank bv_runs_rank_;
+};
+
+
+template<typename _Iter>
+class RLEIterator : public std::iterator<std::input_iterator_tag,
+                                         typename _Iter::value_type,
+                                         typename _Iter::difference_type,
+                                         typename _Iter::pointer,
+                                         typename _Iter::reference> {
+ public:
+  RLEIterator(const _Iter &_iter, _Iter _eiter) : iter_(_iter), eiter_(_eiter) {}
+
+  RLEIterator &operator++() {
+    for (auto it = iter_++; iter_ != eiter_ && *it == *iter_; ++it, ++iter_);
+
+    return *this;
+  }
+
+  RLEIterator operator++(int) {
+    _Iter first = iter_;
+    for (auto it = iter_++; iter_ != eiter_ && *it == *iter_; ++it, ++iter_);
+
+    return RLEIterator<_Iter>(first, eiter_);
+  }
+
+  bool operator==(RLEIterator _other) const { return iter_ == _other.iter_; }
+
+  bool operator!=(RLEIterator _other) const { return !(*this == _other); }
+
+  typename _Iter::reference operator*() const { return *iter_; }
+
+  typename _Iter::pointer operator->() const { return iter_.operator->(); }
+
+ protected:
+  _Iter iter_;
+  _Iter eiter_;
 };
 
 }
