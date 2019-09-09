@@ -28,6 +28,7 @@
 #include "drl/dl_sampled_tree_scheme.h"
 #include "drl/helper.h"
 #include "drl/pdl_suffix_tree.h"
+#include "drl/io.h"
 
 #include "r_index/r_index.hpp"
 
@@ -212,22 +213,6 @@ auto BM_pdloda_rl = [](benchmark::State &st, auto *idx, const auto &rlcsa, const
 };
 
 
-template<typename _T>
-bool Load(_T &_t, const std::string &_prefix, const sdsl::cache_config &_cconfig) {
-  if (sdsl::cache_file_exists<_T>(_prefix, _cconfig)) {
-    return sdsl::load_from_file(_t, sdsl::cache_file_name<_T>(_prefix, _cconfig));
-  }
-
-  return false;
-}
-
-
-template<typename _T>
-bool Save(const _T &_t, const std::string &_prefix, const sdsl::cache_config &_cconfig) {
-  return sdsl::store_to_file(_t, sdsl::cache_file_name<_T>(_prefix, _cconfig));
-}
-
-
 class MergeSetsBinTreeFunctor {
  public:
   template<typename _II, typename _Sets, typename _Result>
@@ -370,6 +355,10 @@ int main(int argc, char *argv[]) {
   grammar::RePairEncoder<true> encoder;
 
   grammar::SLP<> slp;
+
+  using drl::Load;
+  using drl::Save;
+
   if (!Load(slp, "slp", cconfig_sep_0)) {
     std::cout << "Construct SLP" << std::endl;
 
