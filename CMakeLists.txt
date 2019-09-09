@@ -54,7 +54,8 @@ set(SOURCE_FILES include/drl/doclist.h
         include/drl/dl_sampled_tree_scheme.h
         include/drl/helper.h
         include/drl/pdl_suffix_tree.h
-        include/drl/rle.h)
+        include/drl/rle.h
+        include/drl/io.h)
 
 find_library(RLCSA_LIB rlcsa)
 find_package(OpenMP REQUIRED)
@@ -91,6 +92,8 @@ if (drl_build_tools)
     cxx_executable_with_flags(build_docs_list "" "${GFLAGS_LIB};${RLCSA_LIB};${OpenMP_CXX_LIBRARIES}" tool/build_docs_list.cpp)
 
     find_package(Boost COMPONENTS filesystem system REQUIRED)
+
+    cxx_executable_with_flags(build_dl_idx "" "${GFLAGS_LIB};${RLCSA_LIB};${OpenMP_CXX_LIBRARIES};drl;${Boost_LIBRARIES}" tool/build_dl_idx.cpp)
 
     cxx_executable_with_flags(expand_doc_array "" "${GFLAGS_LIB};${RLCSA_LIB};${OpenMP_CXX_LIBRARIES};drl;${Boost_LIBRARIES}" tool/expand_doc_array.cpp)
 endif ()
