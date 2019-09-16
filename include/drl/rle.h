@@ -41,8 +41,13 @@ void BuildRLEncoding(_II _first, _II _last, _BVRuns &_bv_runs) {
 template<typename _BVRuns, typename _BVRunsRank = typename _BVRuns::rank_1_type>
 class RLEncoding {
  public:
+  RLEncoding() = default;
+
   template<typename __BVRuns>
   RLEncoding(const __BVRuns &_bv_runs): bv_runs_(_bv_runs), bv_runs_rank_(&bv_runs_) {}
+
+  template<typename __BVRuns, typename __BVRunsRank>
+  RLEncoding(RLEncoding<__BVRuns, __BVRunsRank> _rle): bv_runs_(_rle.GetRuns()), bv_runs_rank_(&bv_runs_) {}
 
   /**
    * Compute the new position on the run-length encoding sequence
@@ -50,8 +55,28 @@ class RLEncoding {
    * @param _pos Original Position
    * @return Run-Length Encoding Position
    */
-  std::size_t operator()(std::size_t _pos) {
+  std::size_t operator()(std::size_t _pos) const {
     return _pos - bv_runs_rank_(_pos + 1);
+  }
+
+  const _BVRuns & GetRuns() const {
+    return bv_runs_;
+  }
+
+  typedef std::size_t size_type;
+
+  template<typename ..._Args>
+  size_type serialize(std::ostream &out, _Args ..._args/*sdsl::structure_tree_node *v = nullptr, const std::string &name = ""*/) const {
+    std::size_t written_bytes = 0;
+    written_bytes += bv_runs_.serialize(out);
+    written_bytes += bv_runs_rank_.serialize(out);
+
+    return written_bytes;
+  }
+
+  void load(std::istream &in) {
+    bv_runs_.load(in);
+    bv_runs_rank_.load(in, &bv_runs_);
   }
 
  protected:
