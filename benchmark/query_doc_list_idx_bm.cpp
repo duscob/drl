@@ -18,6 +18,7 @@
 
 #include <grammar/slp.h>
 #include <grammar/slp_metadata.h>
+#include <drl/rle.h>
 
 #include "drl/doclist.h"
 #include "drl/pdlrp.h"
@@ -111,6 +112,24 @@ auto BM_dl_scheme =
         for (const auto &pat : patterns) {
           auto range = rlcsa->count(pat);
           auto res = idx->list(range.first, range.second + 1);
+          docc += res.size();
+        }
+      }
+
+      st.counters["Patterns"] = patterns.size();
+      st.counters["Docs"] = docc;
+      if (FLAGS_print_size) st.counters["Size"] = _size_in_bytes;
+    };
+
+auto BM_dl_scheme_new_range =
+    [](benchmark::State &st, auto *idx, const auto &new_pos, const auto &rlcsa, const auto &patterns, std::size_t _size_in_bytes = 0) {
+      usint docc = 0;
+
+      for (auto _ : st) {
+        docc = 0;
+        for (const auto &pat : patterns) {
+          auto range = rlcsa->count(pat);
+          auto res = idx->list(new_pos(range.first), new_pos(range.second) + 1);
           docc += res.size();
         }
       }
@@ -772,6 +791,37 @@ int main(int argc, char *argv[]) {
                                rlcsa,
                                patterns,
                                kSize_lslp_bslp + kSize_sslp_gcchunks_bslp_bc);
+
+  //RLSLP
+  drl::RLEncoding<sdsl::rrr_vector<>> rle_rrrv;
+  Load(rle_rrrv, "rle-rrrv", cconfig_sep_0);
+  const auto kSize_rle_rrrv = sdsl::size_in_bytes(rle_rrrv);
+
+  grammar::LightSLP<grammar::BasicSLP<sdsl::int_vector<>>,
+                    grammar::SampledSLP<>,
+                    grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>>> lslp_bslp_rle;
+  Load(lslp_bslp_rle, prefix + "-rlslp", cconfig_sep_0);
+  const auto kSize_lslp_bslp_rle = sdsl::size_in_bytes(lslp_bslp_rle);
+
+  auto compute_cover_rle = drl::BuildComputeCoverBottomFunctor(lslp_bslp_rle);
+  drl::ExpandSLPFunctor<decltype(lslp_bslp_rle)> lslp_bslp_rle_get_docs{lslp_bslp_rle};
+
+  grammar::GCChunks<
+      grammar::BasicSLP<sdsl::int_vector<>>,
+      true,
+      grammar::Chunks<sdsl::int_vector<>, sdsl::int_vector<>>> sslp_gcchunks_bslp_bc_rle;
+  Load(sslp_gcchunks_bslp_bc_rle, prefix + "-rlpts", cconfig_sep_0);
+  const auto kSize_sslp_gcchunks_bslp_bc_rle = sdsl::size_in_bytes(sslp_gcchunks_bslp_bc_rle);
+
+  auto dl_lslp_bslp_bslp_rle =
+      drl::BuildDLSampledTreeScheme(compute_cover_rle, lslp_bslp_rle_get_docs, sslp_gcchunks_bslp_bc_rle, merge);
+  benchmark::RegisterBenchmark("GCDA_rle_lslp<bslp>_gcchunks<bslp,bc>",
+                               BM_dl_scheme_new_range,
+                               &dl_lslp_bslp_bslp_rle,
+                               rle_rrrv,
+                               rlcsa,
+                               patterns,
+                               kSize_rle_rrrv + kSize_lslp_bslp_rle + kSize_sslp_gcchunks_bslp_bc_rle);
 
   benchmark::Initialize(&argc, argv);
   benchmark::RunSpecifiedBenchmarks();
