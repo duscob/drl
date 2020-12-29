@@ -14,28 +14,28 @@
 
 namespace drl {
 
-template<typename _Tree, typename _Report>
-auto ComputeCoverFromBottom(const _Tree &_tree, std::size_t _bp, std::size_t _ep, _Report _report)
--> std::pair<decltype(_tree.Position(1)), decltype(_tree.Position(1))> {
-  auto l = _tree.Leaf(_bp);
-  if (_tree.Position(l) < _bp) ++l;
-
-  auto r = _tree.Leaf(_ep) - 1;
-
-  for (auto i = l, next = i + 1; i <= r; i = next, ++next) {
-    while (_tree.IsFirstChild(i)) {
-      auto p = _tree.Parent(i);
-      if (p.second > r + 1)
-        break;
-      i = p.first;
-      next = p.second;
-    }
-
-    _report(i);
-  }
-
-  return std::make_pair(_tree.Position(l), _tree.Position(r + 1));
-}
+//template<typename _Tree, typename _Report>
+//auto ComputeCoverFromBottom(const _Tree &_tree, std::size_t _bp, std::size_t _ep, _Report _report)
+//-> std::pair<decltype(_tree.Position(1)), decltype(_tree.Position(1))> {
+//  auto l = _tree.Leaf(_bp);
+//  if (_tree.Position(l) < _bp) ++l;
+//
+//  auto r = _tree.Leaf(_ep) - 1;
+//
+//  for (auto i = l, next = i + 1; i <= r; i = next, ++next) {
+//    while (_tree.IsFirstChild(i)) {
+//      auto p = _tree.Parent(i);
+//      if (p.second > r + 1)
+//        break;
+//      i = p.first;
+//      next = p.second;
+//    }
+//
+//    _report(i);
+//  }
+//
+//  return std::make_pair(_tree.Position(l), _tree.Position(r + 1));
+//}
 
 
 template<typename _Tree>
