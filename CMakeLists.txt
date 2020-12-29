@@ -60,10 +60,10 @@ set(SOURCE_FILES include/drl/doclist.h
 find_library(RLCSA_LIB rlcsa)
 find_package(OpenMP REQUIRED)
 find_library(SDSL_LIB sdsl)
-find_library(CDS_LIB cds)
-find_library(GRAMMAR_LIB grammar)
 find_library(DIVSUFSORT_LIB divsufsort)
 find_library(DIVSUFSORT64_LIB divsufsort64)
+find_library(CDS_LIB cds)
+find_library(GRAMMAR_LIB grammar)
 set(LIBS ${RLCSA_LIB} ${OpenMP_CXX_LIBRARIES} ${SDSL_LIB} ${CDS_LIB} ${GRAMMAR_LIB} ${DIVSUFSORT_LIB} ${DIVSUFSORT64_LIB})
 
 add_library(drl ${SOURCE_FILES})
