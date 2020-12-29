@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 dir=$1
-benchmark=$2
+benchmark=${2:-"$SCRIPT_DIR/../build/query_doc_list_idx_bm"}
 
 for coll in `ls $dir`
 do
