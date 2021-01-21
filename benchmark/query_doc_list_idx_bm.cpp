@@ -396,7 +396,8 @@ int main(int argc, char *argv[]) {
 
     std::string input;
     {
-      std::ifstream fs((coll_path / "data").string());
+//      std::ifstream fs((coll_path / "data").string());
+      std::ifstream fs(data_path.string());
       std::stringstream buffer;
       buffer << fs.rdbuf();
 
